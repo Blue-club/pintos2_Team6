@@ -6,8 +6,15 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h"
+
+/* Project 2. */
 #define USERPROG
 #define FILESYS
+/* Project 2. */
+
+/* Project 3. */
+#define VM
+
 #ifdef VM
 #include "vm/vm.h"
 #endif

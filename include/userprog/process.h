@@ -3,6 +3,10 @@
 
 #include "threads/thread.h"
 
+/* Project 3. */
+#define VM
+
+/* Project 2. */
 /* Process identifier. */
 typedef int pid_t;
 #define PID_ERROR ((pid_t) -1)
@@ -17,6 +21,7 @@ typedef int off_t;
 /* Typical return values from main() and arguments to exit(). */
 #define EXIT_SUCCESS 0          /* Successful execution. */
 #define EXIT_FAILURE 1          /* Unsuccessful execution. */
+/* Project 2. */
 
 tid_t process_create_initd (const char *);
 tid_t process_fork (const char *, struct intr_frame *);

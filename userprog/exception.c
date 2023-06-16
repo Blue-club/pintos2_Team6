@@ -150,7 +150,7 @@ page_fault (struct intr_frame *f) {
 	page_fault_cnt++;
 
 	/* Project 2. */
-	exit (-1);
+	// exit (-1);
 
 	/* If the fault is true fault, show info and exit. */
 	printf ("Page fault at %p: %s error %s page in %s context.\n",
