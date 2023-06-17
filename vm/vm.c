@@ -57,29 +57,68 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		struct page *page = palloc_get_page (PAL_ASSERT);
-		uninit_new (page, upage, init, VM_ANON, aux, NULL);
+		struct page *new_page = palloc_get_page (PAL_ASSERT);
+		if (new_page == NULL)
+			goto err;
+
+		void *new_initializer;
+		switch (type) {
+			case VM_ANON:
+				new_initializer = anon_initializer;
+				break;
+			case VM_FILE:
+				new_initializer = file_backed_initializer;
+				break;
+		}
+
+		uninit_new (new_page, upage, init, type, aux, new_initializer);
 		/* TODO: Insert the page into the spt. */
-		spt_insert_page (spt, page);
+		return spt_insert_page (spt, new_page);
 	}
+	//printf("check\n");
 err:
 	return false;
 }
 
+#define list_elem_to_hash_elem(LIST_ELEM)                       \
+	list_entry(LIST_ELEM, struct hash_elem, list_elem)
+
 /* Find VA from spt and return page. On error, return NULL. */
 /* return upage. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
+spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
 	// TODO: 유저 페이지 주소 va를 기반으로 hash_elem 값을 찾아야 한다.
-	page = pg_round_down (va);
-	if (hash_find (&spt->spt_hash, &page->h_elem) == NULL) {
-		return NULL;
-	}
-	/* Project 3. */
+	struct hash* h = &spt->spt_hash;
+	// void *upage = pg_round_down (va);
+	// size_t bucket_idx = hash_bytes (upage, 1 << 12) & (h->bucket_cnt - 1);
+	// struct list *bucket = &h->buckets[bucket_idx];
 
-	return page;
+	// struct list_elem *i;
+	// for (i = list_begin (bucket); i != list_end (bucket); i = list_next (i)) {
+	// 	struct hash_elem *hi = list_elem_to_hash_elem (i);
+	// 	struct page *page = hash_entry (hi, struct page, h_elem);
+	// 	if (upage == page->va) {
+	// 		return page;
+	// 	}
+	// }
+
+	page = malloc (sizeof (struct page));
+	page->va = pg_round_down (va);
+	struct hash_elem *elem = hash_find (h, &page->h_elem);
+	free (page);
+
+	if (!elem)
+		return NULL;
+
+	struct page *upage = hash_entry (elem, struct page, h_elem);
+
+	if (upage)
+		return upage;
+	
+	/* Project 3. */
+	return NULL;
 }
 
 /* Insert PAGE into spt with validation. */
@@ -91,6 +130,7 @@ spt_insert_page (struct supplemental_page_table *spt,
 	/* Project 3. */
 	/* TODO: Fill this function. */
 	/* TODO: check error. */
+	//printf("call insert! %p\n", page->va);
 	if (hash_insert (&spt->spt_hash, &page->h_elem) == NULL) {
 		succ = true;
 	}
@@ -132,13 +172,14 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-	frame = (struct frame *)malloc (sizeof (struct frame));
-	uint64_t *kva = palloc_get_page (PAL_USER);
+	frame = malloc (sizeof (struct frame));
+	void *kva = palloc_get_page (PAL_USER);
 	if (!kva) {
 		free (frame);
 		PANIC ("TODO");
 	}
 	frame->kva = kva;
+	frame->page = NULL;
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -163,7 +204,12 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
+	//printf("addr: %p\n", addr);
+	page = spt_find_page (&spt->spt_hash, addr);
+	//printf("addr: %p in try_handle\n", addr);
+	ASSERT (page != NULL);
 
+	//printf("check page->va: %p in handler.\n", page->va);
 	return vm_do_claim_page (page);
 }
 
@@ -185,9 +231,7 @@ vm_claim_page (void *va) {
 	/* TODO: Fill this function */
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	page = spt_find_page (spt, va);
-	if (page == NULL) {
-		return false;
-	}
+	ASSERT (page != NULL);
 	// TODO: spt에서 매핑한 페이지의 상태 변경
 	/* Project 3. */
 
@@ -199,7 +243,6 @@ vm_claim_page (void *va) {
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
-
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
@@ -207,7 +250,7 @@ vm_do_claim_page (struct page *page) {
 	/* Project 3. */
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	uint64_t* pml4 = thread_current ()->pml4;
-	pml4_set_page (pml4, page->va, frame->kva, false);
+	pml4_set_page (pml4, page->va, frame->kva, true);
 	/* Project 3. */
 
 	return swap_in (page, frame->kva);
@@ -235,10 +278,12 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 uint64_t
 hash_func (const struct hash_elem *e, void *aux) {
 	struct page* page = hash_entry (e, struct page, h_elem);
-	return hash_bytes (page->va, 1 << 12);
+	return hash_bytes (&page->va, sizeof (page->va));
 }
 
 bool
 less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux) {
-
+	struct page *apage = hash_entry (a, struct page, h_elem);
+	struct page *bpage = hash_entry (b, struct page, h_elem);
+	return apage->va < bpage->va;
 }
