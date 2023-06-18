@@ -57,12 +57,13 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		struct page *new_page = palloc_get_page (PAL_ASSERT);
+		struct page *new_page = malloc (sizeof (struct page));
 		if (new_page == NULL)
 			goto err;
 
-		void *new_initializer;
+		void *new_initializer = NULL;
 		switch (type) {
+			default:
 			case VM_ANON:
 				new_initializer = anon_initializer;
 				break;
@@ -70,12 +71,11 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 				new_initializer = file_backed_initializer;
 				break;
 		}
-
 		uninit_new (new_page, upage, init, type, aux, new_initializer);
+		
 		/* TODO: Insert the page into the spt. */
 		return spt_insert_page (spt, new_page);
 	}
-	//printf("check\n");
 err:
 	return false;
 }
@@ -88,8 +88,8 @@ err:
 struct page *
 spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page *page = NULL;
-	/* TODO: Fill this function. */
-	// TODO: 유저 페이지 주소 va를 기반으로 hash_elem 값을 찾아야 한다.
+
+	/* Project 3. */
 	struct hash* h = &spt->spt_hash;
 	// void *upage = pg_round_down (va);
 	// size_t bucket_idx = hash_bytes (upage, 1 << 12) & (h->bucket_cnt - 1);
@@ -116,8 +116,8 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 
 	if (upage)
 		return upage;
-	
 	/* Project 3. */
+
 	return NULL;
 }
 
@@ -128,9 +128,7 @@ spt_insert_page (struct supplemental_page_table *spt,
 	int succ = false;
 
 	/* Project 3. */
-	/* TODO: Fill this function. */
 	/* TODO: check error. */
-	//printf("call insert! %p\n", page->va);
 	if (hash_insert (&spt->spt_hash, &page->h_elem) == NULL) {
 		succ = true;
 	}
@@ -142,7 +140,9 @@ spt_insert_page (struct supplemental_page_table *spt,
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	vm_dealloc_page (page);
-	return true;
+
+	void * result = hash_delete (&spt->spt_hash, &page->h_elem);
+	ASSERT (result != NULL);
 }
 
 /* Get the struct frame, that will be evicted. */
@@ -171,8 +171,11 @@ vm_evict_frame (void) {
 static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
-	/* TODO: Fill this function. */
+	
+	/* Project 3. */
 	frame = malloc (sizeof (struct frame));
+	ASSERT (frame != NULL);
+
 	void *kva = palloc_get_page (PAL_USER);
 	if (!kva) {
 		free (frame);
@@ -180,8 +183,8 @@ vm_get_frame (void) {
 	}
 	frame->kva = kva;
 	frame->page = NULL;
+	/* Project 3. */
 
-	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
 }
@@ -198,18 +201,23 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
+vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
-	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
-	//printf("addr: %p\n", addr);
-	page = spt_find_page (&spt->spt_hash, addr);
-	//printf("addr: %p in try_handle\n", addr);
-	ASSERT (page != NULL);
 
-	//printf("check page->va: %p in handler.\n", page->va);
+	/* Project 3. */
+	/* TODO: Validate the fault */
+	if (!is_user_vaddr (addr)) {
+		return false;
+	}
+	
+	page = spt_find_page (&spt->spt_hash, addr);
+	if (page == NULL) {
+		return false;
+	}
+	/* Project 3. */
+
 	return vm_do_claim_page (page);
 }
 
@@ -222,35 +230,31 @@ vm_dealloc_page (struct page *page) {
 }
 
 /* Claim the page that allocate on VA. */
-/* 유저 페이지 va를 매핑 요청 */
 bool
 vm_claim_page (void *va) {
 	struct page *page = NULL;
 
 	/* Project 3. */
-	/* TODO: Fill this function */
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	page = spt_find_page (spt, va);
 	ASSERT (page != NULL);
-	// TODO: spt에서 매핑한 페이지의 상태 변경
 	/* Project 3. */
 
 	return vm_do_claim_page (page);
 }
 
 /* Claim the PAGE and set up the mmu. */
-/* 유저 페이지 page를 매핑 */
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
+
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
 
 	/* Project 3. */
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	uint64_t* pml4 = thread_current ()->pml4;
-	pml4_set_page (pml4, page->va, frame->kva, true);
+	pml4_set_page (thread_current ()->pml4, page->va, frame->kva, true);
 	/* Project 3. */
 
 	return swap_in (page, frame->kva);
@@ -278,7 +282,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 uint64_t
 hash_func (const struct hash_elem *e, void *aux) {
 	struct page* page = hash_entry (e, struct page, h_elem);
-	return hash_bytes (&page->va, sizeof (page->va));
+	return hash_bytes (&page->va, sizeof (void *));
 }
 
 bool

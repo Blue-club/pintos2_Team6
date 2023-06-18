@@ -506,7 +506,7 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
-	// printf("check load segment\n");
+
 	/* Project 2. */
 	t->running = file;
 	file_deny_write (file);
@@ -684,6 +684,7 @@ install_page (void *upage, void *kpage, bool writable) {
 
 struct file_segment {
 	struct file *file;
+	off_t ofs;
 	size_t page_read_bytes;
 	size_t page_zero_bytes;
 	bool writable;
@@ -691,48 +692,36 @@ struct file_segment {
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
+	/* Project 3. */
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
 	struct file_segment *file_segment = (struct file_segment *)aux;
 	struct file *file = file_segment->file;
+	off_t ofs = file_segment->ofs;
 	size_t page_read_bytes = file_segment->page_read_bytes;
 	size_t page_zero_bytes = file_segment->page_zero_bytes;
 	bool writable = file_segment->writable;
+
+	ASSERT (pml4_get_page (thread_current ()->pml4, page->va) != NULL);
+
 	/* Get a page of memory. */
-	
-	
 	void *kpage = page->frame->kva;
-	//printf("va: %p, kva: %p\n", page->va, kpage);
-	// printf("%p\n", kpage);
 	if (kpage == NULL)
 		return false;
+
 	/* Load this page. */
+	file_seek (file, ofs);
 	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
 		palloc_free_page (kpage);
 		printf("read fail!!!\n");
 		return false;
 	}
-	//printf("check\n");
-	// memset (kpage + page_read_bytes, 0, page_zero_bytes);
+	memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-	/* Add the page to the process's address space. */
-	struct thread *t = thread_current ();
-
-	/* Verify that there's not already a page at that virtual
-	 * address, then map our page there. */
-	free (aux);
-	//printf("called lazy!: %p\n", page->va);
-	/* if (pml4_get_page (t->pml4, page->va) == NULL) {
-		printf("p1\n");
-		if (pml4_set_page (t->pml4, page->va, kpage, writable))
-			printf("p2\n");
-	} */
-	//printf("asdf\n");
-	void * result;
-	result = pml4_get_page (t->pml4, page->va);
+	free (file);
+	free (file_segment);
 	return true;
-	//return (pml4_get_page (t->pml4, page->va) == NULL && pml4_set_page (t->pml4, page->va, kpage, writable));
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -766,15 +755,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* Project 3. */
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		void *aux = NULL;
-		struct file_segment *file_segment = malloc (sizeof (file_segment));
+		struct file_segment *file_segment = malloc (sizeof (struct file_segment));
 		file_segment->file = malloc (sizeof (struct file));
+		file_segment->ofs = ofs;
 		file_segment->page_read_bytes = page_read_bytes;
 		file_segment->page_zero_bytes = page_zero_bytes;
-		//file_segment->file->inode = file->inode;
-		//file_segment->file->deny_write = false;
 		memcpy (file_segment->file, file, sizeof (struct file));
-		file_seek (file_segment->file, ofs);
-		aux = file_segment;
+		aux = (void *)file_segment;
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
 			return false;
