@@ -8,6 +8,8 @@
 #include "threads/synch.h"
 #define USERPROG
 #define FILESYS
+#define VM // -------------------
+
 #ifdef VM
 #include "vm/vm.h"
 #endif

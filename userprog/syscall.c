@@ -102,7 +102,8 @@ syscall_handler (struct intr_frame *f) {
 
 void
 check_address(void *addr) {
-	if (is_kernel_vaddr (addr) || addr == NULL || pml4_get_page (thread_current ()->pml4, addr) == NULL) {
+	//printf("check_address: %p\n\n", addr);
+	if (is_kernel_vaddr(addr) || addr == NULL) {// || pml4_get_page(thread_current()->pml4, addr) == NULL)
 		exit (-1);
 	}
 }
@@ -131,10 +132,12 @@ exec (const char *cmd_line) {
 	char *file_name = (char *)palloc_get_page (PAL_ZERO);
 	if (file_name == NULL)
 		exit (-1);
-	memcpy (file_name, cmd_line, strlen (cmd_line)+1);
+	// memcpy (file_name, cmd_line, strlen (cmd_line)+1);
+	strlcpy (file_name, cmd_line, PGSIZE);
 
-	if (process_exec (file_name) == -1) 
+	if (process_exec (file_name) == -1) {
 		exit (-1);
+	}
 }
 
 int

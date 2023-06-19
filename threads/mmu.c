@@ -68,6 +68,9 @@ pml4e_walk (uint64_t *pml4e, const uint64_t va, int create) {
 	int allocated = 0;
 	if (pml4e) {
 		uint64_t *pdpe = (uint64_t *) pml4e[idx];
+		// printf("va: %p\n", va);
+		// printf("pml4e_walk/ pdpe: %p\n", pdpe);
+		// printf("pml4e_walk/ pml4e[idx]: %p\n\n", pml4e[idx]);
 		if (!((uint64_t) pdpe & PTE_P)) {
 			if (create) {
 				uint64_t *new_page = palloc_get_page (PAL_ZERO);
@@ -81,6 +84,7 @@ pml4e_walk (uint64_t *pml4e, const uint64_t va, int create) {
 		}
 		pte = pdpe_walk (ptov (PTE_ADDR (pml4e[idx])), va, create);
 	}
+
 	if (pte == NULL && allocated) {
 		palloc_free_page ((void *) ptov (PTE_ADDR (pml4e[idx])));
 		pml4e[idx] = 0;
@@ -218,6 +222,7 @@ pml4_get_page (uint64_t *pml4, const void *uaddr) {
 
 	if (pte && (*pte & PTE_P))
 		return ptov (PTE_ADDR (*pte)) + pg_ofs (uaddr);
+
 	return NULL;
 }
 

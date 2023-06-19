@@ -9,6 +9,9 @@
 #include "../debug.h"
 #include "threads/malloc.h"
 
+/* Project 3 */
+#include "vm/vm.h"
+
 #define list_elem_to_hash_elem(LIST_ELEM)                       \
 	list_entry(LIST_ELEM, struct hash_elem, list_elem)
 
@@ -88,8 +91,11 @@ hash_destroy (struct hash *h, hash_action_func *destructor) {
    no equal element is already in the table.
    If an equal element is already in the table, returns it
    without inserting NEW. */
-struct hash_elem *
-hash_insert (struct hash *h, struct hash_elem *new) {
+/* hash_func를 쓰고  hash를 얻는다. 하지만 지금 find_bucket 안에서
+   hash_func에 *hash_elem을 넘겨줬다. 그렇다면 *hash_elem이 키인가? 
+   -> hash_elem를 가지고 hash_entry를 사용해서 hash_elem이 속한 struct page를 가져오자. 
+   그 page의 va를 가지고 hash를 만들어보자. -> hash_elem, va 뭘로 hash를 얻어야 할까? */
+struct hash_elem * hash_insert (struct hash *h, struct hash_elem *new) {
 	struct list *bucket = find_bucket (h, new);
 	struct hash_elem *old = find_elem (h, bucket, new);
 
@@ -249,8 +255,9 @@ hash_bytes (const void *buf_, size_t size) {
 	ASSERT (buf != NULL);
 
 	hash = FNV_64_BASIS;
-	while (size-- > 0)
+	while (size-- > 0) {
 		hash = (hash * FNV_64_PRIME) ^ *buf++;
+	}
 
 	return hash;
 }
@@ -279,12 +286,15 @@ hash_int (int i) {
 /* Returns the bucket in H that E belongs in. */
 static struct list *
 find_bucket (struct hash *h, struct hash_elem *e) {
+	// hash % bucket_cnt 와 같은 작업같음.
 	size_t bucket_idx = h->hash (e, h->aux) & (h->bucket_cnt - 1);
 	return &h->buckets[bucket_idx];
 }
 
 /* Searches BUCKET in H for a hash element equal to E.  Returns
    it if found or a null pointer otherwise. */
+/* find_bucket()에서 hash_func를 써서 몇번째 bucket에 해당하는지 확인 후
+   그 bucket의 주소를 반환하고, 이 bucket에서 입력받은 hash_elem을 찾는다. */
 static struct hash_elem *
 find_elem (struct hash *h, struct list *bucket, struct hash_elem *e) {
 	struct list_elem *i;
@@ -392,3 +402,19 @@ remove_elem (struct hash *h, struct hash_elem *e) {
 	list_remove (&e->list_elem);
 }
 
+// /* Project 3 */
+// uint64_t hash_func(const struct hash_elem *e, void *aux) {
+// 	struct page *page = hash_entry(e, struct page, h_elem);
+
+// 	/* 인자로 뭘 넣어줘도 상관 없을거 같은데 일단 첫번째 인자로는 va 넣어줬고,
+// 	   size는 일단 4KB 넣어줬음. */
+// 	return hash_bytes(page->va, 1 << 12);
+// }
+
+// /* Project 3 */
+// bool hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux) {
+// 	struct page *page_a = hash_entry(a, struct page, h_elem);
+// 	struct page *page_b = hash_entry(b, struct page, h_elem);
+
+// 	return page_a->va < page_b->va;
+// }
