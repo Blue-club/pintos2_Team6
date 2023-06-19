@@ -140,9 +140,7 @@ spt_insert_page (struct supplemental_page_table *spt,
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	vm_dealloc_page (page);
-
-	void * result = hash_delete (&spt->spt_hash, &page->h_elem);
-	ASSERT (result != NULL);
+	hash_delete (&spt->spt_hash, &page->h_elem);
 }
 
 /* Get the struct frame, that will be evicted. */
@@ -237,7 +235,9 @@ vm_claim_page (void *va) {
 	/* Project 3. */
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	page = spt_find_page (spt, va);
-	ASSERT (page != NULL);
+	if (page == NULL) {
+		return false;
+	}
 	/* Project 3. */
 
 	return vm_do_claim_page (page);
@@ -254,6 +254,14 @@ vm_do_claim_page (struct page *page) {
 
 	/* Project 3. */
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	if (page == NULL) {
+		free (frame);
+		return false;
+	}
+
+	if (pml4_get_page (thread_current ()->pml4, page->va) != NULL) {
+		return false;
+	}
 	pml4_set_page (thread_current ()->pml4, page->va, frame->kva, true);
 	/* Project 3. */
 
@@ -268,8 +276,12 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	ASSERT (dst != NULL);
+	ASSERT (src != NULL);
+	memcpy (&dst->spt_hash, &src->spt_hash, sizeof (struct hash));
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
