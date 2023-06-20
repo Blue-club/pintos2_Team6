@@ -193,7 +193,22 @@ vm_get_frame (void) {
 
 /* Growing the stack. */
 static void
-vm_stack_growth (void *addr UNUSED) {
+vm_stack_growth (void *addr) {
+	void *stack_bottom = pg_round_down (addr);
+	int pg_cnt = 0;
+	while (true) {
+		void *upage = (uint64_t)stack_bottom + pg_cnt * PGSIZE;
+		if (spt_find_page (&thread_current ()->spt, upage) != NULL) {
+			break;
+		}
+		if (!vm_alloc_page (VM_ANON | VM_MARKER_0, upage, true)) {
+			break;
+		}
+		if (!vm_claim_page (upage)) {
+			break;
+		}
+		pg_cnt++;
+	}
 }
 
 /* Handle the fault on write_protected page */
@@ -204,17 +219,30 @@ vm_handle_wp (struct page *page UNUSED) {
 /* Return true on success */
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+		bool user UNUSED, bool write, bool not_present) {
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
 
 	/* Project 3. */
 	/* TODO: Validate the fault */
-	if (!is_user_vaddr (addr)) {
+	if (addr == NULL) {
 		return false;
 	}
+	else if (!is_user_vaddr (addr)) {
+		return false;
+	}
+	else if (USER_STACK - (1 << 20) <= addr && addr <= USER_STACK) {
+		if (f->rsp - 8 != addr) {
+			return false;
+		}
 
-	if (not_present) {
+		vm_stack_growth (addr);
+		if (pml4_get_page (thread_current ()->pml4, pg_round_down (addr)) == NULL) {
+			return false;
+		}
+		return true;
+	}
+	else if (not_present) {
 		page = spt_find_page (&spt->spt_hash, addr);
 		if (page == NULL) {
 			return false;
@@ -224,8 +252,6 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 		}
 		return vm_do_claim_page (page);
 	}
-	
-	
 	/* Project 3. */
 
 	return false;
