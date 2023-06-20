@@ -57,24 +57,26 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		struct page *new_page = malloc (sizeof (struct page));
-		if (new_page == NULL)
+		struct page *page = malloc (sizeof (struct page));
+		if (page == NULL)
 			goto err;
 
 		void *new_initializer = NULL;
-		switch (type) {
-			default:
+		switch (VM_TYPE(type)) {
 			case VM_ANON:
 				new_initializer = anon_initializer;
 				break;
 			case VM_FILE:
 				new_initializer = file_backed_initializer;
 				break;
+			default:
+				return false;
 		}
-		uninit_new (new_page, upage, init, type, aux, new_initializer);
-		
+		uninit_new (page, upage, init, type, aux, new_initializer);
+		page->writable = writable;
+
 		/* TODO: Insert the page into the spt. */
-		return spt_insert_page (spt, new_page);
+		return spt_insert_page (spt, page);
 	}
 err:
 	return false;
@@ -109,13 +111,15 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct hash_elem *elem = hash_find (h, &page->h_elem);
 	free (page);
 
-	if (!elem)
+	if (elem == NULL) {
 		return NULL;
+	}
 
 	struct page *upage = hash_entry (elem, struct page, h_elem);
 
-	if (upage)
+	if (upage) {
 		return upage;
+	}
 	/* Project 3. */
 
 	return NULL;
@@ -209,14 +213,22 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 	if (!is_user_vaddr (addr)) {
 		return false;
 	}
-	
-	page = spt_find_page (&spt->spt_hash, addr);
-	if (page == NULL) {
-		return false;
+
+	if (not_present) {
+		page = spt_find_page (&spt->spt_hash, addr);
+		if (page == NULL) {
+			return false;
+		}
+		if (write && !page->writable) {
+			return false;
+		}
+		return vm_do_claim_page (page);
 	}
+	
+	
 	/* Project 3. */
 
-	return vm_do_claim_page (page);
+	return false;
 }
 
 /* Free the page.
@@ -233,8 +245,7 @@ vm_claim_page (void *va) {
 	struct page *page = NULL;
 
 	/* Project 3. */
-	struct supplemental_page_table *spt = &thread_current ()->spt;
-	page = spt_find_page (spt, va);
+	page = spt_find_page (&thread_current ()->spt, va);
 	if (page == NULL) {
 		return false;
 	}
@@ -259,10 +270,7 @@ vm_do_claim_page (struct page *page) {
 		return false;
 	}
 
-	if (pml4_get_page (thread_current ()->pml4, page->va) != NULL) {
-		return false;
-	}
-	pml4_set_page (thread_current ()->pml4, page->va, frame->kva, true);
+	pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable);
 	/* Project 3. */
 
 	return swap_in (page, frame->kva);
@@ -278,17 +286,57 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct supplemental_page_table *src) {
-	ASSERT (dst != NULL);
-	ASSERT (src != NULL);
-	memcpy (&dst->spt_hash, &src->spt_hash, sizeof (struct hash));
+	struct hash_iterator i;
+	hash_first (&i, &src->spt_hash);
+	while (hash_next (&i)) {
+		struct page *src_page = hash_entry (hash_cur (&i), struct page, h_elem);
+		enum vm_type type = VM_TYPE (src_page->operations->type);
+		void *upage = src_page->va;
+		bool writable = src_page->writable;
+		
+		switch (type) {
+			case VM_UNINIT: {
+				vm_initializer *init = src_page->uninit.init;
+				void *aux = src_page->uninit.aux;
+				vm_alloc_page_with_initializer (VM_ANON, upage, writable, init, aux);
+				break;
+			}
+			case VM_ANON:
+			case VM_FILE: {
+				if (!vm_alloc_page (type, upage, writable)) {
+					return false;
+				}
+		
+				if (!vm_claim_page (upage)) {
+					return false;
+				}
+
+				struct page *dst_page = spt_find_page (dst, upage);
+				memcpy (dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+				break;
+			}
+			default: {
+				return false;
+			}
+		}
+	}
+
 	return true;
+}
+
+static void
+hash_page_destroy(struct hash_elem *e, void *aux) {
+	struct page *page = hash_entry (e, struct page, h_elem);
+	destroy (page);
+	free (page);
 }
 
 /* Free the resource hold by the supplemental page table */
 void
-supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	hash_clear (&spt->spt_hash, hash_page_destroy);
 }
 
 uint64_t
