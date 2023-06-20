@@ -168,16 +168,14 @@ static struct frame *vm_get_frame(void) {
 
 /* Growing the stack. */
 static void vm_stack_growth (void *addr) {
-	// 1개 이상의 vm_anon page를 할당하여 스택을 늘린다.
 	void *stack_bottom = pg_round_down(addr);
 	int pg_cnt = 0;
 
 	while (true) {
 		void *upage = (uint64_t)stack_bottom + PGSIZE * pg_cnt;
 
-		if (spt_find_page(&thread_current()->spt, upage) != NULL) {
+		if (spt_find_page(&thread_current()->spt, upage) != NULL)
 			break;
-		}
 
 		vm_alloc_page(VM_ANON | VM_MARKER_0, upage, true);
 		vm_claim_page(upage);
@@ -212,7 +210,7 @@ bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user, bool writ
 
 		if (page == NULL)
 			return false;
-		
+
 		return vm_do_claim_page(page);
 	}
 
