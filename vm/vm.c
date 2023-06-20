@@ -167,8 +167,24 @@ static struct frame *vm_get_frame(void) {
 }
 
 /* Growing the stack. */
-static void
-vm_stack_growth (void *addr UNUSED) {
+static void vm_stack_growth (void *addr) {
+	// 1개 이상의 vm_anon page를 할당하여 스택을 늘린다.
+	void *stack_bottom = pg_round_down(addr);
+	int pg_cnt = 0;
+
+	while (true) {
+		void *upage = (uint64_t)stack_bottom + PGSIZE * pg_cnt;
+
+		if (spt_find_page(&thread_current()->spt, upage) != NULL) {
+			// printf("upage: %p\n", upage); // 추후삭제
+			break;
+		}
+
+		vm_alloc_page(VM_ANON | VM_MARKER_0, upage, true);
+		vm_claim_page(upage);
+
+		pg_cnt++;
+	}
 }
 
 /* Handle the fault on write_protected page */
@@ -177,40 +193,34 @@ vm_handle_wp (struct page *page UNUSED) {
 }
 
 /* Return true on success */
-bool vm_try_handle_fault (struct intr_frame *f, void *addr,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user, bool write, bool not_present) {
 
-	// struct supplemental_page_table *spt = &thread_current()->spt;
-	// struct page *page = NULL;
-	// /* TODO: Validate the fault */
-	// /* TODO: Your code goes here */
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	struct page *page = NULL;
 
-	// page = spt_find_page(&spt->spt_hash, addr);
+	if (addr == NULL)
+		return false;
+	else if (is_kernel_vaddr(addr))
+		return false;
+	else if (addr >= USER_STACK - (1 << 20)) {
+		if (pg_round_down(f->rsp) != pg_round_down(addr))
+			return false;
 
-	// if (!page)
-	// 	return false;
+		// printf("addr: %p\n", addr);		// 추후삭제
+		// printf("rsp:  %p\n", f->rsp);	// 추후삭제
+		vm_stack_growth(addr);
+		return true;
+	}
+	else if (not_present) {
+		page = spt_find_page(&spt->spt_hash, addr);
 
-	// return vm_do_claim_page(page);
+		if (page == NULL)
+			return false;
+		
+		return vm_do_claim_page(page);
+	}
 
-	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
-    struct page *page = NULL;
-    if (addr == NULL)
-        return false;
-
-    if (is_kernel_vaddr(addr))
-        return false;
-
-    if (not_present) // 접근한 메모리의 physical page가 존재하지 않은 경우
-    {
-        /* TODO: Validate the fault */
-        page = spt_find_page(spt, addr);
-        if (page == NULL)
-            return false;
-        if (write == 1 && page->writable == 0) // write 불가능한 페이지에 write 요청한 경우
-            return false;
-        return vm_do_claim_page(page);
-    }
-    return false;
+	return false;
 }
 
 /* Free the page.
@@ -276,12 +286,8 @@ bool supplemental_page_table_copy (struct supplemental_page_table *dst, struct s
 		uint8_t type = VM_TYPE(src_page->operations->type);
 		switch (type) {
 			case VM_UNINIT:
-				if (vm_alloc_page_with_initializer (VM_ANON, upage, writable, init, aux)) {
-					struct page *dst_page = spt_find_page (dst, upage);
-				}
-				else {
-					return false;
-				}
+				// NULL이면 종료!
+				ASSERT(vm_alloc_page_with_initializer (VM_ANON, upage, writable, init, aux) != NULL);
 				break;
 			case VM_ANON:
 			case VM_FILE:
