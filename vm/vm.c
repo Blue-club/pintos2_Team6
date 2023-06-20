@@ -176,7 +176,6 @@ static void vm_stack_growth (void *addr) {
 		void *upage = (uint64_t)stack_bottom + PGSIZE * pg_cnt;
 
 		if (spt_find_page(&thread_current()->spt, upage) != NULL) {
-			// printf("upage: %p\n", upage); // 추후삭제
 			break;
 		}
 
@@ -194,7 +193,6 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user, bool write, bool not_present) {
-
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *page = NULL;
 
@@ -202,12 +200,10 @@ bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user, bool writ
 		return false;
 	else if (is_kernel_vaddr(addr))
 		return false;
-	else if (addr >= USER_STACK - (1 << 20)) {
-		if (pg_round_down(f->rsp) != pg_round_down(addr))
+	else if (USER_STACK >= addr && addr >= USER_STACK - (1 << 20)) {
+		if (f->rsp - 8 != addr)
 			return false;
 
-		// printf("addr: %p\n", addr);		// 추후삭제
-		// printf("rsp:  %p\n", f->rsp);	// 추후삭제
 		vm_stack_growth(addr);
 		return true;
 	}
