@@ -687,7 +687,6 @@ struct file_segment {
 	off_t ofs;
 	size_t page_read_bytes;
 	size_t page_zero_bytes;
-	bool writable;
 };
 
 static bool
@@ -701,7 +700,6 @@ lazy_load_segment (struct page *page, void *aux) {
 	off_t ofs = file_segment->ofs;
 	size_t page_read_bytes = file_segment->page_read_bytes;
 	size_t page_zero_bytes = file_segment->page_zero_bytes;
-	bool writable = file_segment->writable;
 
 	if (pml4_get_page (thread_current ()->pml4, page->va) == NULL) {
 		return false;
@@ -720,7 +718,6 @@ lazy_load_segment (struct page *page, void *aux) {
 	}
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-	free (file);
 	free (file_segment);
 	return true;
 }
@@ -757,11 +754,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		void *aux = NULL;
 		struct file_segment *file_segment = malloc (sizeof (struct file_segment));
-		file_segment->file = malloc (sizeof (struct file));
+		file_segment->file = file;
 		file_segment->ofs = ofs;
 		file_segment->page_read_bytes = page_read_bytes;
 		file_segment->page_zero_bytes = page_zero_bytes;
-		memcpy (file_segment->file, file, sizeof (struct file));
 		aux = (void *)file_segment;
 
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
@@ -790,8 +786,7 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
-	struct thread *t = thread_current ();
-	if (vm_alloc_page (VM_ANON, stack_bottom, true)) {
+	if (vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true)) {
 		success = vm_claim_page (stack_bottom);
 		if (success)
 			if_->rsp = USER_STACK;
