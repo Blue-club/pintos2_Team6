@@ -241,15 +241,45 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	struct hash_iterator iter;
+	hash_first(&iter, &src->spt_hash);
+	
+	while(hash_next(&iter)){
+		struct hash_elem *elem = hash_cur(&iter);
+		struct page *src_page = hash_entry(elem, struct page, h_elem);
+
+		void *upage = src_page->va;
+		void *init = src_page->uninit.init;
+		void *aux = src_page->uninit.aux;
+
+		if(VM_TYPE(src_page->operations->type) == VM_UNINIT){
+			vm_alloc_page_with_initializer(VM_ANON, upage, true, init, aux);
+			continue;
+		} else{
+			if(vm_alloc_page(VM_ANON, upage, true)){
+				struct page *dst_page = spt_find_page(dst, upage);
+
+				if(vm_do_claim_page(dst_page)){
+					struct frame *dst_frame = dst_page->frame;
+					memcpy(dst_frame->kva, src_page->frame->kva, PGSIZE);
+				} else
+					return false;
+			} else
+				return false;
+		}
+	}
+	return true;
 }
+
 
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	
 }
 
 uint64_t

@@ -391,13 +391,3 @@ remove_elem (struct hash *h, struct hash_elem *e) {
 	h->elem_cnt--;
 	list_remove (&e->list_elem);
 }
-
-// uint64_t hash_hash_func(const struct hash_elem *e, void *aux){
-// 	struct page *page = hash_entry(e, struct page, elem);
-
-// 	return hash_bytes(page->va, 1<<12);
-// }
-
-// bool hash_less_func(const struct hash_elem *a, const struct hash_elem *b, void *aux){
-	
-// }
