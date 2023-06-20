@@ -311,16 +311,7 @@ bool supplemental_page_table_copy (struct supplemental_page_table *dst, struct s
 void supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	// struct hash_iterator iter;
-	// hash_first(&iter, &spt->spt_hash);
-	// while(hash_next(&iter)) {
-	// 	struct hash_elem *elem = hash_cur(&iter);
-	// 	struct page *page = hash_entry(elem, struct page, h_elem);
-
-	// 	if (page) {
-	// 		destroy(page);
-	// 	}
-	// }
+	hash_clear(&spt->spt_hash, action_func);
 }
 
 /* Project 3 */
@@ -334,5 +325,13 @@ bool less_func(const struct hash_elem *a, const struct hash_elem *b, void *aux) 
 	struct page *b_page = hash_entry(b, struct page, h_elem);
 
 	return a_page->va < b_page->va;
+}
+
+void action_func(struct hash_elem *e, void *aux) {
+	struct page *page = hash_entry(e, struct page, h_elem);
+
+	if(page) {
+		destroy(page);
+	}
 }
 /* Project 3 */
