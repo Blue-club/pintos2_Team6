@@ -50,6 +50,7 @@ struct page {
 
 	/* Your implementation */
 	struct hash_elem h_elem;
+	bool writable;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -117,5 +118,6 @@ enum vm_type page_get_type (struct page *page);
 
 uint64_t hash_func (const struct hash_elem *e, void *aux);
 bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux);
+void action_func(struct hash_elem *e, void *aux);
 
 #endif  /* VM_VM_H */
