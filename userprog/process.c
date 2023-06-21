@@ -682,13 +682,6 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-struct file_segment {
-	struct file *file;
-	off_t ofs;
-	size_t page_read_bytes;
-	size_t page_zero_bytes;
-};
-
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* Project 3. */
@@ -785,7 +778,6 @@ setup_stack (struct intr_frame *if_) {
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
-	/* TODO: Your code goes here */
 	if (vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true)) {
 		success = vm_claim_page (stack_bottom);
 		if (success)
@@ -799,7 +791,7 @@ setup_stack (struct intr_frame *if_) {
 /* Project 2. */
 int
 process_add_file (struct file *f) {
-	struct thread *curr = thread_current();
+	struct thread *curr = thread_current ();
 	struct file **fdt = curr->fdt;
 
 	while (curr->next_fd < FDT_COUNT_LIMIT && fdt[curr->next_fd])

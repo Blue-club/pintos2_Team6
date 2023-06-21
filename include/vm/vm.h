@@ -41,6 +41,15 @@ struct thread;
 
 #define VM_TYPE(type) ((type) & 7)
 
+/* Project 3. */
+struct file_segment {
+	struct file *file;
+	off_t ofs;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+};
+/* Project 3. */
+
 /* The representation of "page".
  * This is kind of "parent class", which has four "child class"es, which are
  * uninit_page, file_page, anon_page, and page cache (project4).
@@ -50,7 +59,6 @@ struct page {
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
 
-	/* Your implementation */
 	/* Project 3. */
 	struct hash_elem h_elem;
 	bool writable;
@@ -93,6 +101,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	/* Project 3. */
 	struct hash spt_hash;
 	uint64_t *pml4;
 };
@@ -122,5 +131,6 @@ enum vm_type page_get_type (struct page *page);
 /* Project 3. */
 uint64_t hash_func (const struct hash_elem *e, void *aux);
 bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux);
+/* Project 3. */
 
 #endif  /* VM_VM_H */
