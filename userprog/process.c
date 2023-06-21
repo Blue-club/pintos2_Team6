@@ -713,13 +713,11 @@ lazy_load_segment (struct page *page, void *aux) {
 	file_seek (file, ofs);
 	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
 		palloc_free_page (kpage);
-		printf("read fail!!!\n");
+		// printf("read fail!!!\n");
 		return false;
 	}
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-	free (file);
-	free (file_segment);
 	return true;
 }
 
