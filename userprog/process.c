@@ -684,32 +684,7 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-static bool lazy_load_segment(struct page *page, void *aux) {
-	/* TODO: Load the segment from the file */
-	/* TODO: This called when the first page fault occurs on address VA. */
-	/* TODO: VA is available when calling this function. */
-
-	// struct file_segment *file_segment = (struct file_segment *)aux;
-	// struct file *file = file_segment->file;
-	// size_t page_read_bytes = file_segment->page_read_bytes;
-	// size_t page_zero_bytes = file_segment->page_zero_bytes;
-
-	// void *kpage = page->frame->kva;
-
-	// if (kpage == NULL)
-	// 	return false;
-
-	// if (file_read(file, kpage, page_read_bytes) != (int)page_read_bytes) {
-	// 	palloc_free_page(kpage);
-	// 	printf("read fail!!!\n");
-	// 	return false;
-	// }
-	// memset(kpage + page_read_bytes, 0, page_zero_bytes);
-	// // free(file_segment->file);
-	// free(aux);
-
-	// return true;
-
+bool lazy_load_segment(struct page *page, void *aux) {
 	struct file_segment *file_segment = (struct file_segment *)aux;
 	struct file *file = file_segment->file;
 	size_t page_read_bytes = file_segment->page_read_bytes;
@@ -722,12 +697,20 @@ static bool lazy_load_segment(struct page *page, void *aux) {
 		return false;
 
 	file_seek(file, ofs);
+	off_t actual_read_bytes = file_read(file, kpage, page_read_bytes);
 
-	if (file_read(file, kpage, page_read_bytes) != (int)page_read_bytes) {
-		palloc_free_page(kpage);
-		return false;
+	switch (VM_TYPE(page->operations->type)) {
+		case VM_ANON:
+			if (actual_read_bytes != (int)page_read_bytes) {
+				palloc_free_page(kpage);
+				return false;
+			}
+			memset((uint64_t)kpage + page_read_bytes, 0, page_zero_bytes);
+			break;
+		case VM_FILE:
+			memset((uint64_t)kpage + actual_read_bytes, 0, PGSIZE - actual_read_bytes);
+			break;
 	}
-	memset(kpage + page_read_bytes, 0, page_zero_bytes);
 
 	return true;
 }
@@ -753,40 +736,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
-	// while (read_bytes > 0 || zero_bytes > 0) {
-	// 	/* Do calculate how to fill this page.
-	// 	 * We will read PAGE_READ_BYTES bytes from FILE
-	// 	 * and zero the final PAGE_ZERO_BYTES bytes. */
-	// 	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-	// 	size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-	// 	/* Project 3. */
-	// 	/* TODO: Set up aux to pass information to the lazy_load_segment. */
-	// 	void *aux = NULL;
-	// 	struct file_segment *file_segment = malloc(sizeof(struct file_segment));
-	// 	file_segment->file = malloc(sizeof(struct file));
-	// 	file_segment->page_read_bytes = page_read_bytes;
-	// 	file_segment->page_zero_bytes = page_zero_bytes;
-
-	// 	memcpy(file_segment->file, file, sizeof(struct file));
-	// 	file_seek(file_segment->file, ofs);
-	// 	aux = file_segment;
-
-	// 	if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, aux)) {
-	// 		return false;
-	// 	}
-			
-	// 	/* Project 3. */
-		
-	// 	/* Advance. */
-	// 	read_bytes -= page_read_bytes;
-	// 	zero_bytes -= page_zero_bytes;
-	// 	upage += PGSIZE;
-
-	// 	/* Project 3. */
-	// 	ofs += page_read_bytes;
-	// }
-
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
@@ -797,10 +746,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* Project 3. */
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		struct file_segment *file_segment = malloc(sizeof(struct file_segment));
-		file_segment->file = file;
+		file_segment->file = malloc(sizeof(struct file));
 		file_segment->page_read_bytes = page_read_bytes;
 		file_segment->page_zero_bytes = page_zero_bytes;
 		file_segment->ofs = ofs;
+
+		memcpy(file_segment->file, file, sizeof(struct file));
 
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, file_segment)) {
 			return false;
