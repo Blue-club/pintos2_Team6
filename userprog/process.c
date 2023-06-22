@@ -682,15 +682,7 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-struct file_segment {
-	struct file *file;
-	off_t ofs;
-	size_t page_read_bytes;
-	size_t page_zero_bytes;
-	bool writable;
-};
-
-static bool
+bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
@@ -700,23 +692,26 @@ lazy_load_segment (struct page *page, void *aux) {
 	off_t ofs = file_segment->ofs;
 	size_t page_read_bytes = file_segment->page_read_bytes;
 	size_t page_zero_bytes = file_segment->page_zero_bytes;
-	bool writable = file_segment->writable;
 
-	ASSERT (pml4_get_page (thread_current ()->pml4, page->va) != NULL);
-
-	/* Get a page of memory. */
 	void *kpage = page->frame->kva;
 	if (kpage == NULL)
 		return false;
 
-	/* Load this page. */
-	file_seek (file, ofs);
-	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
-		palloc_free_page (kpage);
-		// printf("read fail!!!\n");
-		return false;
+	file_seek(file, ofs);
+	off_t actual_read_bytes = file_read(file, kpage, page_read_bytes);
+
+	switch (VM_TYPE(page->operations->type)) {
+		case VM_ANON:
+			if (actual_read_bytes != (int)page_read_bytes) {
+				palloc_free_page(kpage);
+				return false;
+			}
+			memset((uint64_t)kpage + page_read_bytes, 0, page_zero_bytes);
+			break;
+		case VM_FILE:
+			memset((uint64_t)kpage + actual_read_bytes, 0, PGSIZE - actual_read_bytes);
+			break;
 	}
-	memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
 	return true;
 }

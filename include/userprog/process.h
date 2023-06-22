@@ -18,6 +18,14 @@ typedef int off_t;
 #define EXIT_SUCCESS 0          /* Successful execution. */
 #define EXIT_FAILURE 1          /* Unsuccessful execution. */
 
+struct file_segment {
+	struct file *file;
+	off_t ofs;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+	bool writable;
+};
+
 tid_t process_create_initd (const char *);
 tid_t process_fork (const char *, struct intr_frame *);
 int process_exec (void *);
@@ -32,5 +40,7 @@ struct file *process_get_file (int);
 void process_close_file (int);
 struct thread *get_child_process (pid_t);
 /* Project 2. */
+
+bool lazy_load_segment (struct page *page, void *aux);
 
 #endif /* userprog/process.h */

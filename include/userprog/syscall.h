@@ -32,4 +32,7 @@ void close (int);
 struct lock filesys_lock;
 /* Project 2. */
 
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap (void *addr);
+
 #endif /* userprog/syscall.h */
