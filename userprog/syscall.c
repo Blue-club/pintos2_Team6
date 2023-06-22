@@ -54,8 +54,9 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f) {
 	int syscall_n = f->R.rax;
-
+	
 	switch (syscall_n) {
+		/* Project 2 */
 		case SYS_HALT:
 			halt ();
 			break;
@@ -97,6 +98,14 @@ syscall_handler (struct intr_frame *f) {
 			break;
 		case SYS_CLOSE:
 			close (f->R.rdi);
+			break;
+		/* Project 3 */
+		case SYS_MMAP:
+			f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+			break;
+		case SYS_MUNMAP:
+			munmap(f->R.rdi);
+			break;
 	}
 }
 
@@ -203,7 +212,6 @@ read (int fd, void *buffer, unsigned size) {
 			lock_release (&filesys_lock);
 			return -1;
 		}
-
 		bytes_read = file_read (file, buffer, size);
 		lock_release (&filesys_lock);
 	}
@@ -260,4 +268,18 @@ close (int fd) {
 		return;
 	file_close (file);
 	process_close_file (fd);
+}
+
+/* Project 3 */
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
+	struct file *file = process_get_file(fd);
+
+	if (file == NULL)
+		return NULL;
+
+	return do_mmap(addr, length, writable, file, offset);
+}
+
+void munmap (void *addr) {
+
 }

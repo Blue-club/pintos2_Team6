@@ -233,6 +233,9 @@ argument_stack (char **argv, int argc, struct intr_frame *if_) {
 
 	if_->R.rdi = argc;
 	if_->R.rsi = if_->rsp + 8;
+
+	/* Project 3 */
+	thread_current()->rsp = if_->rsp; // 추후변경
 }
 
 /* Switch the current execution context to the f_name.
@@ -680,13 +683,6 @@ install_page (void *upage, void *kpage, bool writable) {
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
-
-struct file_segment {
-	struct file *file;
-	size_t page_read_bytes;
-	size_t page_zero_bytes;
-	off_t ofs;
-};
 
 static bool lazy_load_segment(struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
