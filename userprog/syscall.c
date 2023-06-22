@@ -15,6 +15,7 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "devices/input.h"
+#include "lib/stdio.h"
 /* Project 2. */
 
 void syscall_entry (void);
@@ -111,7 +112,6 @@ syscall_handler (struct intr_frame *f) {
 
 void
 check_address(void *addr) {
-	//printf("check_address: %p\n\n", addr);
 	if (is_kernel_vaddr(addr) || addr == NULL) {// || pml4_get_page(thread_current()->pml4, addr) == NULL)
 		exit (-1);
 	}
@@ -212,6 +212,14 @@ read (int fd, void *buffer, unsigned size) {
 			lock_release (&filesys_lock);
 			return -1;
 		}
+
+		/* pt-write-code2 없어지는데 lazy-file이 안됨. */
+		// struct page *page = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
+		// if (page->writable == 0) {
+		// 	lock_release (&filesys_lock);
+		// 	exit(-1);
+		// }
+
 		bytes_read = file_read (file, buffer, size);
 		lock_release (&filesys_lock);
 	}
@@ -281,5 +289,5 @@ void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 }
 
 void munmap (void *addr) {
-
+	do_munmap(addr);
 }
