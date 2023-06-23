@@ -125,7 +125,7 @@ halt (void) {
 void
 exit (int status) {
 	struct thread *t = thread_current ();
-	printf ("%s: exit(%d)\n", t->name, status);
+	printf("%s: exit(%d)\n", t->name, status);
 	t->exit_status = status;
 	thread_exit ();
 }
@@ -143,7 +143,6 @@ exec (const char *cmd_line) {
 		exit (-1);
 	// memcpy (file_name, cmd_line, strlen (cmd_line)+1);
 	strlcpy (file_name, cmd_line, PGSIZE);
-
 	if (process_exec (file_name) == -1) {
 		exit (-1);
 	}
@@ -214,11 +213,11 @@ read (int fd, void *buffer, unsigned size) {
 		}
 
 		/* pt-write-code2 없어지는데 lazy-file이 안됨. */
-		// struct page *page = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
-		// if (page->writable == 0) {
-		// 	lock_release (&filesys_lock);
-		// 	exit(-1);
-		// }
+		struct page *page = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
+		if (page->writable == 0) {
+			lock_release (&filesys_lock);
+			exit(-1);
+		}
 
 		bytes_read = file_read (file, buffer, size);
 		lock_release (&filesys_lock);
@@ -280,8 +279,18 @@ close (int fd) {
 
 /* Project 3 */
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
-	struct file *file = process_get_file(fd);
+	if (is_kernel_vaddr(addr) || addr == NULL)
+		return NULL;
+	if (is_kernel_vaddr(addr + length) || (addr + length) == NULL)
+		return NULL;
+	if (addr != pg_round_down(addr))
+		return NULL;
+	if (length == 0)
+		return NULL;
+	if (offset % PGSIZE)
+		return NULL;
 
+	struct file *file = process_get_file(fd);
 	if (file == NULL)
 		return NULL;
 

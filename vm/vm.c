@@ -7,6 +7,7 @@
 /* Project 3. */
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
+#include "userprog/process.h"
 #include <string.h>
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
@@ -252,7 +253,7 @@ static bool vm_do_claim_page(struct page *page) {
 	uint64_t* pml4 = thread_current()->pml4;
 	// 가상 주소와 물리 주소를 맵핑한 정보를 페이지 테이블에 추가한다.
 	pml4_set_page(pml4, page->va, frame->kva, page->writable);
-
+	
 	return swap_in(page, frame->kva);
 }
 
@@ -266,46 +267,58 @@ void supplemental_page_table_init(struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool supplemental_page_table_copy (struct supplemental_page_table *dst, struct supplemental_page_table *src) {
-	struct hash_iterator iter;
-	hash_first(&iter, &src->spt_hash);
-	while(hash_next(&iter)) {
-		struct hash_elem *elem = hash_cur(&iter);
-		struct page *src_page = hash_entry(elem, struct page, h_elem);
-
-		void *upage = src_page->va;
-		void *init = src_page->uninit.init;
-		void *aux = src_page->uninit.aux;
-		bool writable = src_page->writable;
+    struct hash_iterator i;
+    hash_first (&i, &src->spt_hash);
+    while (hash_next (&i)) {
+        struct page *parent_page = hash_entry(hash_cur(&i), struct page, h_elem);
+        enum vm_type type = parent_page->operations->type;
 		
-		uint8_t type = VM_TYPE(src_page->operations->type);
-		switch (type) {
-			case VM_UNINIT:
-				// NULL이면 종료!
-				ASSERT(vm_alloc_page_with_initializer (VM_ANON, upage, writable, init, aux) != NULL);
-				break;
-			case VM_ANON:
-			case VM_FILE:
-				if (vm_alloc_page (type, upage, writable)) {
-					struct page *dst_page = spt_find_page (dst, upage);
-
-					if (vm_do_claim_page(dst_page)) {
-						struct frame *dst_frame = dst_page->frame;
-						memcpy(dst_frame->kva, src_page->frame->kva, PGSIZE);
-					}
-					else {
-						return false;
-					}
-				}
-				else {
+        switch (VM_TYPE(type)) {
+            case VM_UNINIT: {
+                if(!vm_alloc_page_with_initializer(VM_ANON, parent_page->va, parent_page->writable, parent_page->uninit.init, parent_page->uninit.aux)) {
 					return false;
 				}
-				
-				break;
-		}
-	}
-	
-	return true;
+
+                break;
+            }
+            case VM_ANON: {
+				if (!vm_alloc_page(type, parent_page->va, parent_page->writable)) {
+                    return false;
+                }
+                if (!vm_claim_page(parent_page->va)) {
+                    return false;
+                }
+
+                struct page *child_page = spt_find_page(dst, parent_page->va);
+                memcpy (child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+
+                break;
+			}
+            case VM_FILE: {
+				struct file_segment *file_segment = malloc(sizeof(struct file_segment));
+				file_segment->file = malloc(sizeof(struct file));
+				memcpy(file_segment->file, parent_page->file.file, sizeof(struct file));
+				file_segment->page_read_bytes = parent_page->file.page_read_bytes;
+				file_segment->page_zero_bytes = parent_page->file.page_zero_bytes;
+				file_segment->ofs = parent_page->file.page_zero_bytes;
+
+                if (!vm_alloc_page_with_initializer(type, parent_page->va, parent_page->writable, NULL, file_segment)) {
+                    return false;
+                }
+                if (!vm_claim_page(parent_page->va)) {
+                    return false;
+                }
+
+                struct page *child_page = spt_find_page(dst, parent_page->va);
+                memcpy (child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+
+                break;
+            }
+        }
+    }
+    return true;
 }
+
 
 /* Free the resource hold by the supplemental page table */
 void supplemental_page_table_kill (struct supplemental_page_table *spt) {

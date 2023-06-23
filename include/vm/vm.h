@@ -24,6 +24,8 @@ enum vm_type {
 	 * markers, until the value is fit in the int. */
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
+	VM_DUMMY = (1 << 5),
+	VM_FILE_END = (1 << 6),
 
 	/* DO NOT EXCEED THIS VALUE. */
 	VM_MARKER_END = (1 << 31),
@@ -54,6 +56,7 @@ struct page {
 	/* Project 3. */
 	struct hash_elem h_elem;
 	bool writable;
+	enum vm_type marker;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -121,5 +124,6 @@ enum vm_type page_get_type (struct page *page);
 /* Project 3. */
 uint64_t hash_func (const struct hash_elem *e, void *aux);
 bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux);
+void action_func(struct hash_elem *e, void *aux);
 
 #endif  /* VM_VM_H */

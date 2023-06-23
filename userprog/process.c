@@ -692,30 +692,16 @@ bool lazy_load_segment(struct page *page, void *aux) {
 	off_t ofs = file_segment->ofs;
 
 	void *kpage = page->frame->kva;
-
 	if (kpage == NULL)
 		return false;
 
 	file_seek(file, ofs);
-	off_t actual_read_bytes = file_read(file, kpage, page_read_bytes);
-
-	/* do_mummap */
-	(&page->file)->actual_read_bytes = actual_read_bytes;
-	/* do_mummap */
-
-	switch (VM_TYPE(page->operations->type)) {
-		case VM_ANON:
-			if (actual_read_bytes != (int)page_read_bytes) {
-				palloc_free_page(kpage);
-				return false;
-			}
-			memset((uint64_t)kpage + page_read_bytes, 0, page_zero_bytes);
-			break;
-		case VM_FILE:
-			// printf("actual_read_bytes: %d\n", actual_read_bytes);//삭제
-			memset((uint64_t)kpage + actual_read_bytes, 0, PGSIZE - actual_read_bytes);
-			break;
+	if (file_read(file, kpage, page_read_bytes) != (int)page_read_bytes) {
+		palloc_free_page(kpage);
+		return false;
 	}
+
+	memset((uint64_t)kpage + page_read_bytes, 0, page_zero_bytes);
 
 	return true;
 }

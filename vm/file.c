@@ -34,9 +34,13 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 
 	struct file_page *file_page = &page->file;
 	struct file_segment *file_segment = (struct file_segment *)page->uninit.aux;
-
-	file_page->myfile = file_segment->file;
+	
+	file_page->file = file_segment->file;
+	file_page->page_read_bytes = file_segment->page_read_bytes;
+	file_page->page_zero_bytes = file_segment->page_zero_bytes;
 	file_page->ofs = file_segment->ofs;
+
+	return true;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -55,43 +59,50 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page = &page->file;
-	// palloc_free_page(page->frame->kva); // 이거 넣으면 터짐
-	// free(page->uninit.aux);
-	pml4_clear_page(&thread_current()->pml4, page->va);
-	free(page);
+	
+	if (pml4_is_dirty(thread_current()->pml4, page->va)) {
+		file_write_at(file_page->file, page->frame->kva, file_page->page_read_bytes, file_page->ofs);
+		pml4_set_dirty(thread_current()->pml4, page->va, 0);
+	}
+
+	hash_delete(&thread_current()->spt.spt_hash, &page->h_elem);
+	pml4_clear_page(thread_current()->pml4, page->va);
 }
 
 /* Do the mmap */
-void *do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offset) {
+void *do_mmap (void *addr, size_t length, int writable, struct file *f, off_t offset) {
 	uint64_t va = addr;
-	file = file_reopen(file);
+	struct file *file = file_reopen(f);
 	int pg_cnt = DIV_ROUND_UP(length, PGSIZE);
+	size_t file_len = file_length(file);
+	size_t read_bytes = file_len < length ? file_len : length;
 
-	while (length > 0) {
-		
+	while (true) {
 		pg_cnt--;
 
-		size_t page_read_bytes = length < PGSIZE ? length : PGSIZE;
+		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
         struct file_segment *file_segment = malloc(sizeof(struct file_segment));
 		file_segment->file = malloc(sizeof(struct file));
 		memcpy(file_segment->file, file, sizeof(struct file));
         file_segment->page_read_bytes = page_read_bytes;
+		file_segment->page_zero_bytes = page_zero_bytes;
 		file_segment->ofs = offset;
 
-		// printf("file: %p\n", file_segment->file);//삭제
-		// printf("offset: %d\n", offset);//삭제
+		if (!vm_alloc_page_with_initializer(VM_FILE, va, writable, lazy_load_segment, file_segment)) {
+			return NULL;
+		}
 
-		if (pg_cnt == 0) {
-			if(!vm_alloc_page_with_initializer(VM_FILE | VM_MARKER_1, va, writable, lazy_load_segment, file_segment)) {
-				return NULL;
-			}
+		struct page *page = spt_find_page(&thread_current()->spt, va);
+		page->marker = VM_DUMMY;
+
+		if(pg_cnt == 0) {
+			page->marker = VM_FILE_END;
+			break;
 		}
-        else {
-			if (!vm_alloc_page_with_initializer(VM_FILE, va, writable, lazy_load_segment, file_segment))
-				return NULL;
-		}
-        length -= page_read_bytes;
+
+        read_bytes -= page_read_bytes;
         offset += page_read_bytes;
 
         va += PGSIZE;
@@ -102,28 +113,18 @@ void *do_mmap (void *addr, size_t length, int writable, struct file *file, off_t
 
 /* Do the munmap */
 void do_munmap (void *addr) {
-	int pg_cnt = 0;
-
 	while (true) {
-		struct page *page = spt_find_page(&thread_current()->spt, (uint64_t)addr + pg_cnt * PGSIZE);
-		struct file_page *file_page = &page->file;
+		struct page *page = spt_find_page(&thread_current()->spt, addr);
+		// struct file_page *file_page = &page->file;
 
-		if (page->uninit.type & VM_MARKER_1) {
-			if (page->writable) {
-				// printf("------------\n");//삭제
-				// printf("file_page->myfile: %p\n", file_page->myfile);//삭제
-				// printf("file_page->actual_read_bytes: %d\n", file_page->actual_read_bytes);//삭제
-				// printf("file_page->ofs: %d\n", file_page->ofs);//삭제
-				file_write_at(file_page->myfile, page->frame->kva, file_page->actual_read_bytes, file_page->ofs);
-			}
+		if (page->marker & VM_FILE_END) {
+			vm_dealloc_page(page);
 			break;
 		}
-		else
-			if (page->writable) {
-				file_write_at(file_page->myfile, page->frame->kva, file_page->actual_read_bytes, file_page->ofs);
-			}
-		
-		pg_cnt++;
+		else {
+			vm_dealloc_page(page);
+		}
+
+		addr += PGSIZE;
 	}
-	// printf("@@@@@@@@@@@\n");//삭제
 }

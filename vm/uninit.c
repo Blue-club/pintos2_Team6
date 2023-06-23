@@ -11,6 +11,9 @@
 #include "vm/vm.h"
 #include "vm/uninit.h"
 
+/* Project 3 */
+#include "userprog/process.h"
+
 static bool uninit_initialize (struct page *page, void *kva);
 static void uninit_destroy (struct page *page);
 
@@ -62,8 +65,9 @@ uninit_initialize (struct page *page, void *kva) {
  * PAGE will be freed by the caller. */
 static void
 uninit_destroy (struct page *page) {
-	struct uninit_page *uninit UNUSED = &page->uninit;
-	/* TODO: Fill this function.
-	 * TODO: If you don't have anything to do, just return. */
-	free(page);
+	struct uninit_page *uninit = &page->uninit;
+	struct file_segment *file_segment = (struct file_segment *)uninit->aux;
+
+	hash_delete(&thread_current()->spt.spt_hash, &page->h_elem);
+	pml4_clear_page(thread_current()->pml4, page->va);
 }
