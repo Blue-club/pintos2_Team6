@@ -207,6 +207,13 @@ read (int fd, void *buffer, unsigned size) {
 			lock_release (&filesys_lock);
 			return -1;
 		}
+		
+		struct page *page = spt_find_page (&thread_current ()->spt, pg_round_down (ptr));
+		if (page != NULL && !page->writable) {
+			lock_release (&filesys_lock);
+			exit (-1);
+		}
+
 
 		bytes_read = file_read (file, buffer, size);
 		lock_release (&filesys_lock);
