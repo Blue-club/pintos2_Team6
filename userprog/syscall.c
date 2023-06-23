@@ -269,7 +269,18 @@ close (int fd) {
 /* Project 3. */
 void *
 mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
-	check_address (addr);
+	if (addr == NULL || !is_user_vaddr (addr)) {
+		return NULL;
+	}
+	if (fd == 0 || fd == 1) {
+		return NULL;
+	}
+	if (addr != pg_round_down (addr)) {
+		return NULL;
+	}
+	if (filesize (fd) <= 0) {
+		return NULL;
+	}
 
 	struct file* file = process_get_file (fd);
 	if (file == NULL) {
@@ -281,8 +292,6 @@ mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 
 void
 munmap (void *addr) {
-	check_address (addr);
-
 	do_munmap (addr);
 }
 /* Project 3. */

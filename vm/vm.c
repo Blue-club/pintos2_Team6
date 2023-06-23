@@ -62,7 +62,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			goto err;
 
 		void *new_initializer = NULL;
-		switch (VM_TYPE(type)) {
+		switch (VM_TYPE (type)) {
 			case VM_ANON:
 				new_initializer = anon_initializer;
 				break;
@@ -143,8 +143,8 @@ spt_insert_page (struct supplemental_page_table *spt,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
-	vm_dealloc_page (page);
 	hash_delete (&spt->spt_hash, &page->h_elem);
+	vm_dealloc_page (page);
 }
 
 /* Get the struct frame, that will be evicted. */
@@ -341,9 +341,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 				memcpy (dst_page->frame->kva, src_page->frame->kva, PGSIZE);
 				break;
 			}
-			default: {
+			default:
 				return false;
-			}
 		}
 	}
 

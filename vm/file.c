@@ -6,11 +6,13 @@
 #include <string.h>
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
+#include "userprog/process.h"
 /* Project 3. */
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
+static bool lazy_load_file (struct page *page, void *aux);
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations file_ops = {
@@ -57,46 +59,59 @@ file_backed_destroy (struct page *page) {
 void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
-	if ((uint64_t)addr % PGSIZE) {
-		return NULL;
+	void *upage = addr;
+	file = file_reopen (file);
+	while (length > 0) {
+		size_t page_read_bytes = length < PGSIZE ? length : PGSIZE;
+		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+		void *aux = NULL;
+		struct file_segment *file_segment = malloc (sizeof (struct file_segment));
+		file_segment->file = malloc (sizeof (struct file));
+		file_segment->ofs = offset;
+		file_segment->page_read_bytes = page_read_bytes;
+		file_segment->page_zero_bytes = page_zero_bytes;
+		memcpy (file_segment->file, file, sizeof (struct file));
+
+		file_seek (file_segment->file, offset);
+		aux = (void *)file_segment;
+		if (!vm_alloc_page_with_initializer (VM_FILE | VM_MARKER_1, upage,
+					writable, lazy_load_file, aux))
+			return NULL;
+		length -= page_read_bytes;
+		offset += page_read_bytes;
+		upage += PGSIZE;
 	}
-
-	struct supplemental_page_table *spt = &thread_current ()->spt;
-	int pg_cnt = 0;
-	off_t read_bytes = 0;
-	void *upage = NULL;
-	struct page *page;
-	
-	file_seek (file, offset);
-	while (length > pg_cnt * PGSIZE) {
-		upage = (uint64_t)addr + pg_cnt * PGSIZE;
-
-		if (spt_find_page (spt, upage) != NULL) {
-			return NULL;
-		}
-		if (vm_alloc_page (VM_FILE, upage, writable) == NULL) {
-			return NULL;
-		}
-
-		page = spt_find_page (spt, upage);
-		if (page == NULL || !vm_claim_page (page->va)) {
-			return NULL;
-		}
-		pg_cnt++;
-
-		read_bytes = file_read (file, page->frame->kva, PGSIZE);
-
-		if (read_bytes < PGSIZE) {
-			break;
-		}
-	}
-	memset ((uint64_t)page->frame->kva + read_bytes, 0, PGSIZE - read_bytes);
-	
-	file_seek (file, offset);
-	return upage;
+	return addr;
 }
 
 /* Do the munmap */
 void
 do_munmap (void *addr) {
+}
+
+static bool
+lazy_load_file (struct page *page, void *aux) {
+	/* Project 3. */
+	struct file_segment *file_segment = (struct file_segment *)aux;
+	struct file *file = file_segment->file;
+	off_t ofs = file_segment->ofs;
+	size_t page_read_bytes = file_segment->page_read_bytes;
+
+	if (pml4_get_page (thread_current ()->pml4, page->va) == NULL) {
+		return false;
+	}
+
+	/* Get a page of memory. */
+	void *kpage = page->frame->kva;
+	if (kpage == NULL) {
+		return false;
+	}
+	file_seek (file, ofs);
+	size_t read_bytes = file_read (file, kpage, page_read_bytes);
+	memset (kpage + read_bytes, 0, PGSIZE - read_bytes);
+
+	//free (file);
+	free (file_segment);
+	return true;
 }

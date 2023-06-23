@@ -697,13 +697,12 @@ lazy_load_segment (struct page *page, void *aux) {
 	if (pml4_get_page (thread_current ()->pml4, page->va) == NULL) {
 		return false;
 	}
+
 	/* Get a page of memory. */
 	void *kpage = page->frame->kva;
 	if (kpage == NULL) {
 		return false;
 	}
-	
-	/* Load this page. */
 	file_seek (file, ofs);
 	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
 		palloc_free_page (kpage);
@@ -711,6 +710,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	}
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
+	free (file);
 	free (file_segment);
 	return true;
 }
@@ -747,12 +747,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		void *aux = NULL;
 		struct file_segment *file_segment = malloc (sizeof (struct file_segment));
-		file_segment->file = file;
+		file_segment->file = malloc (sizeof (struct file));
 		file_segment->ofs = ofs;
 		file_segment->page_read_bytes = page_read_bytes;
 		file_segment->page_zero_bytes = page_zero_bytes;
-		aux = (void *)file_segment;
+		memcpy (file_segment->file, file, sizeof (struct file));
 
+		//file_seek (file_segment->file, ofs);
+		aux = (void *)file_segment;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
 			return false;
