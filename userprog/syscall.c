@@ -214,7 +214,6 @@ read (int fd, void *buffer, unsigned size) {
 			exit (-1);
 		}
 
-
 		bytes_read = file_read (file, buffer, size);
 		lock_release (&filesys_lock);
 	}
@@ -286,6 +285,9 @@ mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 		return NULL;
 	}
 	if (filesize (fd) <= 0) {
+		return NULL;
+	}
+	if (offset >= length) {
 		return NULL;
 	}
 
