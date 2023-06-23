@@ -78,6 +78,7 @@ do_mmap (void *addr, size_t length, int writable,
 		if (!vm_alloc_page_with_initializer (VM_FILE | VM_MARKER_1, upage,
 					writable, lazy_load_file, aux))
 			return NULL;
+			
 		length -= page_read_bytes;
 		offset += page_read_bytes;
 		upage += PGSIZE;
