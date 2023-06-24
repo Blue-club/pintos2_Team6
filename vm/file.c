@@ -54,6 +54,7 @@ static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page = &page->file;
 	struct file *file = file_page->myfile;
+	struct file *file_segment = file_page->file_segment;
 	void *kpage = page->frame->kva;
 	off_t size = file_page->actual_read_bytes;
 	off_t start = file_page->ofs;
@@ -62,8 +63,8 @@ file_backed_destroy (struct page *page) {
 		file_write_at (file, kpage, size, start);
 		pml4_set_dirty (thread_current ()->pml4, page->va, false);
 	}
-	//file_close (file);
-	// free (file);
+	free (file);
+	free (file_segment);
 }
 
 /* Project 3. */
@@ -72,7 +73,6 @@ void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
 	void *upage = addr;
-	file = file_reopen (file);
 
 	while (length > 0) {
 		size_t page_read_bytes = length < PGSIZE ? length : PGSIZE;
@@ -80,11 +80,10 @@ do_mmap (void *addr, size_t length, int writable,
 
 		void *aux = NULL;
 		struct file_segment *file_segment = malloc (sizeof (struct file_segment));
-		file_segment->file = malloc (sizeof (struct file));
+		file_segment->file = file_reopen (file);
 		file_segment->ofs = offset;
 		file_segment->page_read_bytes = page_read_bytes;
 		file_segment->page_zero_bytes = page_zero_bytes;
-		memcpy (file_segment->file, file, sizeof (struct file));
 
 		file_seek (file_segment->file, offset);
 		aux = (void *)file_segment;
@@ -115,11 +114,11 @@ do_munmap (void *addr) {
 	void *upage = pg_round_down (addr);
     int pg_cnt = 0;
     while (true) {
-        struct page *page = spt_find_page(spt, (uint64_t)upage + pg_cnt * PGSIZE);
-		// printf("munmap %d: %p\n", pg_cnt, page->va);
+        struct page *page = spt_find_page (spt, (uint64_t)upage + pg_cnt * PGSIZE);
         if (page == NULL) {
 			exit (-1);
 		}
+
         struct file_page *file_page = &page->file;
         if (page->operations->type == VM_ANON) {
             if (page->uninit.type & VM_MARKER_1) {
@@ -138,7 +137,7 @@ do_munmap (void *addr) {
         }
         else {
             if (page->writable) {
-				file_write_at(file_page->myfile, page->frame->kva, file_page->actual_read_bytes, file_page->ofs);
+				file_write_at (file_page->myfile, page->frame->kva, file_page->actual_read_bytes, file_page->ofs);
 				pml4_set_dirty (thread_current ()->pml4, page->va, false);
 			}
 			spt_remove_page (spt, page);
@@ -171,7 +170,7 @@ lazy_load_file (struct page *page, void *aux) {
 	page->file.myfile = file;
 	page->file.actual_read_bytes = read_bytes;
 	page->file.ofs = ofs;
+	page->file.file_segment = aux;
 
-	free (file_segment);
 	return true;
 }

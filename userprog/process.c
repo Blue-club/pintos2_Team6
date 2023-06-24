@@ -748,10 +748,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		void *aux = NULL;
 		struct file_segment *file_segment = malloc (sizeof (struct file_segment));
 		file_segment->file = malloc (sizeof (struct file));
+		memcpy (file_segment->file, file, sizeof (struct file));
 		file_segment->ofs = ofs;
 		file_segment->page_read_bytes = page_read_bytes;
 		file_segment->page_zero_bytes = page_zero_bytes;
-		memcpy (file_segment->file, file, sizeof (struct file));
 
 		//file_seek (file_segment->file, ofs);
 		aux = (void *)file_segment;

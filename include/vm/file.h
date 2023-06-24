@@ -12,6 +12,7 @@ struct file_page {
 	struct file *myfile;
 	size_t actual_read_bytes;
 	off_t ofs;
+	struct file_segment *file_segment;
 	/* Project 3. */
 };
 

@@ -44,7 +44,7 @@ static struct frame *vm_evict_frame (void);
 /* Project 3. */
 static uint64_t hash_func (const struct hash_elem *e, void *aux);
 static bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux);
-static void action_func (struct hash_elem *e, void *aux);
+static void destroy_func (struct hash_elem *e, void *aux);
 /* Project 3. */
 
 /* Create the pending page object with initializer. If you want to create a
@@ -325,12 +325,14 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 		enum vm_type type = src_page->operations->type;
 		void *upage = src_page->va;
 		bool writable = src_page->writable;
-		
+		vm_initializer *init = src_page->uninit.init;
+		void *aux = src_page->uninit.aux;
+		//struct file_segment *file_segment = malloc (sizeof (struct file_segment));
+		//memcpy (file_segment, (struct file_segment *)src_page->uninit.aux, sizeof (struct file_segment));
+		//void *aux = (struct file_segment *)file_segment;
+
 		switch (VM_TYPE (type)) {
 			case VM_UNINIT: {
-				vm_initializer *init = src_page->uninit.init;
-				void *aux = malloc (sizeof (struct file_segment));
-				aux = src_page->uninit.aux;
 				vm_alloc_page_with_initializer (VM_ANON, upage, writable, init, aux);
 				break;
 			}
@@ -346,6 +348,11 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 
 				struct page *dst_page = spt_find_page (dst, upage);
 				memcpy (dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+
+				if (VM_TYPE (type) == VM_FILE) {
+					dst_page->file.myfile = file_reopen (src_page->file.myfile);
+				}
+
 				break;
 			}
 			default:
@@ -361,8 +368,7 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	// printf("destroy!!!!!\n");
-	hash_clear (&spt->spt_hash, action_func);
+	hash_clear (&spt->spt_hash, destroy_func);
 }
 
 static uint64_t
@@ -379,7 +385,7 @@ less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux) {
 }
 
 static void
-action_func (struct hash_elem *e, void *aux) {
+destroy_func (struct hash_elem *e, void *aux) {
 	struct page *page = hash_entry (e, struct page, h_elem);
 	// printf("%d\n", page->operations->type);
 	if (page != NULL) {
