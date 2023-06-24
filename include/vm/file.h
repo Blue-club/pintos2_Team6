@@ -7,6 +7,12 @@ struct page;
 enum vm_type;
 
 struct file_page {
+	/* Project 3. */
+	enum vm_type type;
+	struct file *myfile;
+	size_t actual_read_bytes;
+	off_t ofs;
+	/* Project 3. */
 };
 
 void vm_file_init (void);

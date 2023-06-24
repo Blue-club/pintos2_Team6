@@ -41,6 +41,12 @@ static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 
+/* Project 3. */
+static uint64_t hash_func (const struct hash_elem *e, void *aux);
+static bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux);
+static void action_func (struct hash_elem *e, void *aux);
+/* Project 3. */
+
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
@@ -316,14 +322,15 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 	hash_first (&i, &src->spt_hash);
 	while (hash_next (&i)) {
 		struct page *src_page = hash_entry (hash_cur (&i), struct page, h_elem);
-		enum vm_type type = VM_TYPE (src_page->operations->type);
+		enum vm_type type = src_page->operations->type;
 		void *upage = src_page->va;
 		bool writable = src_page->writable;
 		
-		switch (type) {
+		switch (VM_TYPE (type)) {
 			case VM_UNINIT: {
 				vm_initializer *init = src_page->uninit.init;
-				void *aux = src_page->uninit.aux;
+				void *aux = malloc (sizeof (struct file_segment));
+				aux = src_page->uninit.aux;
 				vm_alloc_page_with_initializer (VM_ANON, upage, writable, init, aux);
 				break;
 			}
@@ -349,30 +356,33 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 	return true;
 }
 
-static void
-hash_page_destroy(struct hash_elem *e, void *aux) {
-	struct page *page = hash_entry (e, struct page, h_elem);
-	destroy (page);
-	free (page);
-}
-
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	hash_clear (&spt->spt_hash, hash_page_destroy);
+	// printf("destroy!!!!!\n");
+	hash_clear (&spt->spt_hash, action_func);
 }
 
-uint64_t
+static uint64_t
 hash_func (const struct hash_elem *e, void *aux) {
 	struct page* page = hash_entry (e, struct page, h_elem);
 	return hash_bytes (&page->va, sizeof (void *));
 }
 
-bool
+static bool
 less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux) {
 	struct page *apage = hash_entry (a, struct page, h_elem);
 	struct page *bpage = hash_entry (b, struct page, h_elem);
 	return apage->va < bpage->va;
+}
+
+static void
+action_func (struct hash_elem *e, void *aux) {
+	struct page *page = hash_entry (e, struct page, h_elem);
+	// printf("%d\n", page->operations->type);
+	if (page != NULL) {
+		vm_dealloc_page (page);
+	}
 }

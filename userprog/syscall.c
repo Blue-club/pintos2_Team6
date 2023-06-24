@@ -140,7 +140,7 @@ exec (const char *cmd_line) {
 		exit (-1);
 	memcpy (file_name, cmd_line, strlen (cmd_line)+1);
 
-	if (process_exec (file_name) == -1) 
+	if (process_exec (file_name) == -1)
 		exit (-1);
 }
 
@@ -287,7 +287,7 @@ mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 	if (filesize (fd) <= 0) {
 		return NULL;
 	}
-	if (offset >= length) {
+	if (offset > length) {
 		return NULL;
 	}
 
