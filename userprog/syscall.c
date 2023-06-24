@@ -275,19 +275,22 @@ close (int fd) {
 /* Project 3. */
 void *
 mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
-	if (addr == NULL || !is_user_vaddr (addr)) {
+	if (addr == NULL || is_kernel_vaddr (addr)) {
 		return NULL;
 	}
-	if (fd == 0 || fd == 1) {
+	else if (fd == 0 || fd == 1) {
 		return NULL;
 	}
-	if (addr != pg_round_down (addr)) {
+	else if (addr != pg_round_down (addr)) {
 		return NULL;
 	}
-	if (filesize (fd) <= 0) {
+	else if (filesize (fd) <= 0) {
 		return NULL;
 	}
-	if (offset > length) {
+	else if (length <= 0 || offset > length) {
+		return NULL;
+	}
+	else if (addr + offset + length < LOADER_PHYS_BASE) {
 		return NULL;
 	}
 
