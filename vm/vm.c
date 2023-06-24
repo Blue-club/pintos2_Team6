@@ -194,7 +194,6 @@ vm_handle_wp (struct page *page UNUSED) {
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user, bool write, bool not_present) {
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *page = NULL;
-
 	if (addr == NULL)
 		return false;
 	else if (is_kernel_vaddr(addr))
@@ -208,7 +207,7 @@ bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user, bool writ
 	}
 	else if (not_present) {
 		page = spt_find_page(&spt->spt_hash, addr);
-
+		
 		if (page == NULL)
 			return false;
 
@@ -269,6 +268,7 @@ void supplemental_page_table_init(struct supplemental_page_table *spt) {
 bool supplemental_page_table_copy (struct supplemental_page_table *dst, struct supplemental_page_table *src) {
     struct hash_iterator i;
     hash_first (&i, &src->spt_hash);
+	
     while (hash_next (&i)) {
         struct page *parent_page = hash_entry(hash_cur(&i), struct page, h_elem);
         enum vm_type type = parent_page->operations->type;
@@ -296,8 +296,9 @@ bool supplemental_page_table_copy (struct supplemental_page_table *dst, struct s
 			}
             case VM_FILE: {
 				struct file_segment *file_segment = malloc(sizeof(struct file_segment));
-				file_segment->file = malloc(sizeof(struct file));
-				memcpy(file_segment->file, parent_page->file.file, sizeof(struct file));
+				// file_segment->file = malloc(sizeof(struct file));
+				// memcpy(file_segment->file, parent_page->file.file, sizeof(struct file));
+				file_segment->file = parent_page->file.file;
 				file_segment->page_read_bytes = parent_page->file.page_read_bytes;
 				file_segment->page_zero_bytes = parent_page->file.page_zero_bytes;
 				file_segment->ofs = parent_page->file.page_zero_bytes;
@@ -318,7 +319,6 @@ bool supplemental_page_table_copy (struct supplemental_page_table *dst, struct s
     }
     return true;
 }
-
 
 /* Free the resource hold by the supplemental page table */
 void supplemental_page_table_kill (struct supplemental_page_table *spt) {
@@ -344,7 +344,14 @@ void action_func(struct hash_elem *e, void *aux) {
 	struct page *page = hash_entry(e, struct page, h_elem);
 
 	if(page) {
-		destroy(page);
+		// if (page->uninit.aux)
+		// 	free(page->uninit.aux);
+		// if (page->frame->kva)
+		// 	palloc_free_page(page->frame->kva);
+		// if (page->frame)
+		// 	free(page->frame);
+
+		vm_dealloc_page(page);
 	}
 }
 /* Project 3 */

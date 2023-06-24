@@ -68,6 +68,9 @@ uninit_destroy (struct page *page) {
 	struct uninit_page *uninit = &page->uninit;
 	struct file_segment *file_segment = (struct file_segment *)uninit->aux;
 
+	// if (page->uninit.aux)
+	// 	free(page->uninit.aux);
+
 	hash_delete(&thread_current()->spt.spt_hash, &page->h_elem);
 	pml4_clear_page(thread_current()->pml4, page->va);
 }

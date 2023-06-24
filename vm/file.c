@@ -65,6 +65,9 @@ file_backed_destroy (struct page *page) {
 		pml4_set_dirty(thread_current()->pml4, page->va, 0);
 	}
 
+	// if (page->uninit.aux)
+	// 	free(page->uninit.aux);
+
 	hash_delete(&thread_current()->spt.spt_hash, &page->h_elem);
 	pml4_clear_page(thread_current()->pml4, page->va);
 }
@@ -84,8 +87,9 @@ void *do_mmap (void *addr, size_t length, int writable, struct file *f, off_t of
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
         struct file_segment *file_segment = malloc(sizeof(struct file_segment));
-		file_segment->file = malloc(sizeof(struct file));
-		memcpy(file_segment->file, file, sizeof(struct file));
+		// file_segment->file = malloc(sizeof(struct file));
+		// memcpy(file_segment->file, file, sizeof(struct file));
+		file_segment->file = file;
         file_segment->page_read_bytes = page_read_bytes;
 		file_segment->page_zero_bytes = page_zero_bytes;
 		file_segment->ofs = offset;
@@ -118,11 +122,11 @@ void do_munmap (void *addr) {
 		// struct file_page *file_page = &page->file;
 
 		if (page->marker & VM_FILE_END) {
-			vm_dealloc_page(page);
+			destroy(page);
 			break;
 		}
 		else {
-			vm_dealloc_page(page);
+			destroy(page);
 		}
 
 		addr += PGSIZE;

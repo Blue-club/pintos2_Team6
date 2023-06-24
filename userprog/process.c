@@ -263,7 +263,6 @@ process_exec (void *f_name) {
 	palloc_free_page (file_name);
 	if (!success)
 		return -1;
-
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -690,8 +689,9 @@ bool lazy_load_segment(struct page *page, void *aux) {
 	size_t page_read_bytes = file_segment->page_read_bytes;
 	size_t page_zero_bytes = file_segment->page_zero_bytes;
 	off_t ofs = file_segment->ofs;
-
+	
 	void *kpage = page->frame->kva;
+
 	if (kpage == NULL)
 		return false;
 
@@ -702,7 +702,6 @@ bool lazy_load_segment(struct page *page, void *aux) {
 	}
 
 	memset((uint64_t)kpage + page_read_bytes, 0, page_zero_bytes);
-
 	return true;
 }
 
@@ -737,12 +736,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* Project 3. */
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		struct file_segment *file_segment = malloc(sizeof(struct file_segment));
-		file_segment->file = malloc(sizeof(struct file));
+		// file_segment->file = malloc(sizeof(struct file));
+		// memcpy(file_segment->file, file, sizeof(struct file));
+		file_segment->file = file;
 		file_segment->page_read_bytes = page_read_bytes;
 		file_segment->page_zero_bytes = page_zero_bytes;
 		file_segment->ofs = ofs;
-
-		memcpy(file_segment->file, file, sizeof(struct file));
 
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, file_segment)) {
 			return false;

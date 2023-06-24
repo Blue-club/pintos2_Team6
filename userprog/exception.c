@@ -142,6 +142,7 @@ page_fault (struct intr_frame *f) {
 
 #ifdef VM
 	/* For project 3 and later. */
+	
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present)) {
 		return;
 	}
@@ -149,7 +150,6 @@ page_fault (struct intr_frame *f) {
 
 	/* Count page faults. */
 	page_fault_cnt++;
-
 	/* Project 2. */
 	exit (-1);
 
