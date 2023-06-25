@@ -179,9 +179,9 @@ __do_fork (void *aux) {
 	/* Project 2. */
 	for (int i = 0; i < FDT_COUNT_LIMIT; i++) {
 		struct file *file = parent->fdt[i];
-		if (file == NULL)
+		if (file == NULL || current->fdt[i] != NULL)
 			continue;
-		if (file > 2)
+		if (i >= 2)
 			file = file_duplicate (file);
 		current->fdt[i] = file;
 	}
@@ -296,15 +296,16 @@ void
 process_exit (void) {
 	struct thread *cur = thread_current ();
 
+	process_cleanup ();
+
 	for (int i = 2; i < FDT_COUNT_LIMIT; i++) {
 		if (cur->fdt[i] != NULL)
 			close (i);
 	}
-
 	palloc_free_multiple (cur->fdt, FDT_PAGES);
 	file_close (cur->running);
 
-	process_cleanup ();
+	hash_destroy(&cur->spt.spt_hash, NULL);
 	sema_up (&cur->wait_sema);
 	sema_down (&cur->exit_sema);
 }
@@ -695,8 +696,7 @@ bool lazy_load_segment(struct page *page, void *aux) {
 	if (kpage == NULL)
 		return false;
 
-	file_seek(file, ofs);
-	if (file_read(file, kpage, page_read_bytes) != (int)page_read_bytes) {
+	if (file_read_at(file, kpage, page_read_bytes, ofs) != (int)page_read_bytes) {
 		palloc_free_page(kpage);
 		return false;
 	}
@@ -736,12 +736,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* Project 3. */
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		struct file_segment *file_segment = malloc(sizeof(struct file_segment));
-		// file_segment->file = malloc(sizeof(struct file));
-		// memcpy(file_segment->file, file, sizeof(struct file));
 		file_segment->file = file;
 		file_segment->page_read_bytes = page_read_bytes;
 		file_segment->page_zero_bytes = page_zero_bytes;
 		file_segment->ofs = ofs;
+		file_segment->fd = -1;
 
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, file_segment)) {
 			return false;

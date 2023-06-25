@@ -23,6 +23,7 @@ struct file_segment {
 	size_t page_read_bytes;
 	size_t page_zero_bytes;
 	off_t ofs;
+	int fd;
 };
 
 tid_t process_create_initd (const char *);

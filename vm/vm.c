@@ -176,6 +176,7 @@ static struct frame *vm_evict_frame (void) {
 	struct frame *victim = vm_get_victim ();
 
 	swap_out(victim->page);
+
 	victim->page->frame = NULL;
 	victim->page = NULL;
 
@@ -232,7 +233,7 @@ vm_handle_wp (struct page *page UNUSED) {
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user, bool write, bool not_present) {
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *page = NULL;
-
+	
 	if (addr == NULL)
 		return false;
 	else if (is_kernel_vaddr(addr))
@@ -245,7 +246,7 @@ bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user, bool writ
 		return true;
 	}
 	else if (not_present) {
-		page = spt_find_page(&spt->spt_hash, addr);
+		page = spt_find_page(spt, addr);
 		
 		if (page == NULL)
 			return false;
@@ -281,7 +282,6 @@ bool vm_claim_page(void *va) {
 /* Claim the PAGE and set up the mmu. */
 static bool vm_do_claim_page(struct page *page) {
 	struct frame *frame = vm_get_frame();
-	
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
@@ -315,7 +315,10 @@ bool supplemental_page_table_copy (struct supplemental_page_table *dst, struct s
 		
         switch (VM_TYPE(type)) {
             case VM_UNINIT: {
-                if(!vm_alloc_page_with_initializer(VM_ANON, parent_page->va, parent_page->writable, parent_page->uninit.init, parent_page->uninit.aux)) {
+				struct file_segment *file_segment = malloc(sizeof(struct file_segment));
+				memcpy(file_segment, parent_page->uninit.aux, sizeof(struct file_segment));
+
+                if(!vm_alloc_page_with_initializer(VM_ANON, parent_page->va, parent_page->writable, parent_page->uninit.init, file_segment)) {
 					return false;
 				}
 
@@ -336,12 +339,22 @@ bool supplemental_page_table_copy (struct supplemental_page_table *dst, struct s
 			}
             case VM_FILE: {
 				struct file_segment *file_segment = malloc(sizeof(struct file_segment));
-				// file_segment->file = malloc(sizeof(struct file));
-				// memcpy(file_segment->file, parent_page->file.file, sizeof(struct file));
-				file_segment->file = parent_page->file.file;
-				file_segment->page_read_bytes = parent_page->file.page_read_bytes;
-				file_segment->page_zero_bytes = parent_page->file.page_zero_bytes;
-				file_segment->ofs = parent_page->file.page_zero_bytes;
+				memcpy(file_segment, parent_page->file.file_segment, sizeof(struct file_segment));
+				/* `````````````````` */
+				struct file *already_file = process_get_file(parent_page->file.file_segment->fd);
+				if (already_file == NULL) {
+					struct thread *curr = thread_current ();
+					struct file **fdt = curr->fdt;
+
+					file_segment->file = file_reopen(parent_page->file.file_segment->file);
+					file_segment->fd = parent_page->file.file_segment->fd;
+					fdt[file_segment->fd] = file_segment->file;
+				}
+				else {
+					file_segment->file = already_file;
+					file_segment->fd = parent_page->file.file_segment->fd;
+				}
+				/* `````````````````` */
 
                 if (!vm_alloc_page_with_initializer(type, parent_page->va, parent_page->writable, NULL, file_segment)) {
                     return false;
@@ -351,6 +364,7 @@ bool supplemental_page_table_copy (struct supplemental_page_table *dst, struct s
                 }
 
                 struct page *child_page = spt_find_page(dst, parent_page->va);
+				child_page->marker = parent_page->marker;
                 memcpy (child_page->frame->kva, parent_page->frame->kva, PGSIZE);
 
                 break;
@@ -384,13 +398,6 @@ void action_func(struct hash_elem *e, void *aux) {
 	struct page *page = hash_entry(e, struct page, h_elem);
 
 	if(page) {
-		// if (page->uninit.aux)
-		// 	free(page->uninit.aux);
-		// if (page->frame->kva)
-		// 	palloc_free_page(page->frame->kva);
-		// if (page->frame)
-		// 	free(page->frame);
-
 		vm_dealloc_page(page);
 	}
 }

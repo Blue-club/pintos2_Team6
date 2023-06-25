@@ -41,7 +41,10 @@ bool anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &anon_ops;
 
 	struct anon_page *anon_page = &page->anon;
+	struct file_segment *file_segment = (struct file_segment *)page->uninit.aux;
+
 	anon_page->occupy_sector_num = -1;
+	anon_page->file_segment = file_segment;
 }
 
 /* Swap in the page by read contents from the swap disk. */
@@ -87,9 +90,17 @@ static bool anon_swap_out (struct page *page) {
 	}
 
 	pml4_clear_page(thread_current()->pml4, page->va);
+
+	return true;
 }
 
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
 static void anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+
+	if (page->anon.file_segment)
+		free(page->anon.file_segment);
+		
+	hash_delete(&thread_current()->spt.spt_hash, &page->h_elem);
+	pml4_clear_page(thread_current()->pml4, page->va);
 }

@@ -6,6 +6,7 @@ enum vm_type;
 
 struct anon_page {
     int occupy_sector_num;
+    struct file_segment *file_segment;
 };
 
 void vm_anon_init (void);
