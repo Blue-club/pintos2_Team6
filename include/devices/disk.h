@@ -27,8 +27,6 @@ struct disk {
 
 	long long read_cnt;         /* Number of sectors read. */
 	long long write_cnt;        /* Number of sectors written. */
-
-    bool *swap_arr;
 };
 
 void disk_init (void);

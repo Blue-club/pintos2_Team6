@@ -126,22 +126,60 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 }
 
 /* Get the struct frame, that will be evicted. */
-static struct frame *
-vm_get_victim (void) {
+static struct frame *vm_get_victim (void) {
 	struct frame *victim = NULL;
-	 /* TODO: The policy for eviction is up to you. */
+	
+	struct hash_iterator i;
+    hash_first (&i, &thread_current()->spt.spt_hash);
+    while (hash_next (&i)) {
+        struct page *page = hash_entry(hash_cur(&i), struct page, h_elem);
+		
+		if (page->frame == NULL) {
+			continue;
+		}
+			
+		if (pml4_is_accessed(thread_current()->pml4, page->va)) {
+			pml4_set_accessed(thread_current()->pml4, page->va, 0);
+			continue;
+		}
+
+		victim = page->frame;
+		break;
+    }
+
+	if (victim == NULL) {
+		struct hash_iterator i;
+   		hash_first (&i, &thread_current()->spt.spt_hash);
+		while (hash_next (&i)) {
+			struct page *page = hash_entry(hash_cur(&i), struct page, h_elem);
+			
+			if (page->frame == NULL) {
+				continue;
+			}
+				
+			if (pml4_is_accessed(thread_current()->pml4, page->va)) {
+				pml4_set_accessed(thread_current()->pml4, page->va, 0);
+				continue;
+			}
+
+			victim = page->frame;
+			break;
+    	}
+	}
 
 	return victim;
 }
 
 /* Evict one page and return the corresponding frame.
  * Return NULL on error.*/
-static struct frame *
-vm_evict_frame (void) {
-	struct frame *victim UNUSED = vm_get_victim ();
-	/* TODO: swap out the victim and return the evicted frame. */
+static struct frame *vm_evict_frame (void) {
+	struct frame *victim = vm_get_victim ();
 
-	return NULL;
+	swap_out(victim->page);
+	victim->page->frame = NULL;
+	victim->page = NULL;
+
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -157,12 +195,12 @@ static struct frame *vm_get_frame(void) {
 
 	if (!kva) {
 		free(frame);
-		PANIC("todo\n");
+		frame = vm_evict_frame();
 	}
-	/* Project 3 */
-
-	frame->kva = kva;
-	frame->page = NULL;
+	else {
+		frame->kva = kva;
+		frame->page = NULL;
+	}
 
 	return frame;
 }

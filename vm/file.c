@@ -22,13 +22,11 @@ static const struct page_operations file_ops = {
 };
 
 /* The initializer of file vm */
-void
-vm_file_init (void) {
+void vm_file_init (void) {
 }
 
 /* Initialize the file backed page */
-bool
-file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
+bool file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &file_ops;
 
@@ -44,15 +42,25 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 }
 
 /* Swap in the page by read contents from the file. */
-static bool
-file_backed_swap_in (struct page *page, void *kva) {
-	struct file_page *file_page UNUSED = &page->file;
+static bool file_backed_swap_in (struct page *page, void *kva) {
+	struct file_page *file_page = &page->file;
+
+	file_read_at(file_page->file, kva, file_page->page_read_bytes, file_page->ofs);
+	memset(kva + file_page->page_read_bytes, 0, file_page->page_zero_bytes);
+
+	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
-static bool
-file_backed_swap_out (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
+static bool file_backed_swap_out (struct page *page) {
+	struct file_page *file_page = &page->file;
+
+	if (pml4_is_dirty(thread_current()->pml4, page->va)) {
+		file_write_at(file_page->file, page->frame->kva, file_page->page_read_bytes, file_page->ofs);
+		pml4_set_dirty(thread_current()->pml4, page->va, 0);
+	}
+
+	pml4_clear_page(thread_current()->pml4, page->va);
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */

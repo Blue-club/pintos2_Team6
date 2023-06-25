@@ -49,9 +49,9 @@ test_main (void)
     /* Check file map'd page again */
     if (memcmp (actual, large, strlen (large)))
         fail ("read of mmap'd file reported bad data");
-
     /* Unmap and close opend file */
     munmap (map);
+
     close (handle);
 }
 
