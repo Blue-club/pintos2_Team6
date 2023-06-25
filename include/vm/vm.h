@@ -40,6 +40,8 @@ enum vm_type {
 
 struct page_operations;
 struct thread;
+/* Project 3 */
+static struct list lru_list;
 
 #define VM_TYPE(type) ((type) & 7)
 
@@ -57,6 +59,9 @@ struct page {
 	struct hash_elem h_elem;
 	bool writable;
 	enum vm_type marker;
+	void *kva;
+	struct list_elem s_elem;
+	struct thread *thread;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */

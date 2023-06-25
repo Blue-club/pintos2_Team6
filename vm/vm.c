@@ -194,6 +194,7 @@ vm_handle_wp (struct page *page UNUSED) {
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user, bool write, bool not_present) {
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *page = NULL;
+
 	if (addr == NULL)
 		return false;
 	else if (is_kernel_vaddr(addr))
@@ -253,6 +254,7 @@ static bool vm_do_claim_page(struct page *page) {
 	// 가상 주소와 물리 주소를 맵핑한 정보를 페이지 테이블에 추가한다.
 	pml4_set_page(pml4, page->va, frame->kva, page->writable);
 	
+	// #define swap_in(page, v) (page)->operations->swap_in ((page), v)
 	return swap_in(page, frame->kva);
 }
 
