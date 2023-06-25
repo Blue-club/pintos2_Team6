@@ -34,37 +34,67 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &file_ops;
 
 	struct file_page *file_page = &page->file;
-	file_page->type = type;
+	struct file_segment *file_segment = (struct file_segment *)page->uninit.aux;
+	
+	file_page->file = file_segment->file;
+	file_page->ofs = file_segment->ofs;
+	file_page->read_bytes = file_segment->page_read_bytes;
+	file_page->zero_bytes = file_segment->page_zero_bytes;
+
+	return true;
 }
 
 /* Swap in the page by read contents from the file. */
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page = &page->file;
+	// printf("innnnnnnnnnnn\n");
+	file_read_at (file_page->file, kva, file_page->read_bytes, file_page->ofs);
+	memset (kva + file_page->read_bytes, 0, file_page->zero_bytes);
+
+	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page = &page->file;
+
+	// printf("Swappppppppppppppp\n");
+	struct thread *t = thread_current ();
+	if (pml4_is_dirty (t->pml4, page->va)) {
+		file_write_at (file_page->file, page->frame->kva, file_page->read_bytes, file_page->ofs);
+		pml4_set_dirty (t->pml4, page->va, false);
+	}
+
+	pml4_clear_page(t->pml4, page->va);
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
 file_backed_destroy (struct page *page) {
+	//printf("destroy!!!!!!!!!: %p\n", page->va);
 	struct file_page *file_page = &page->file;
-	struct file *file = file_page->myfile;
-	struct file *file_segment = file_page->file_segment;
-	void *kpage = page->frame->kva;
-	off_t size = file_page->actual_read_bytes;
-	off_t start = file_page->ofs;
-
-	if (page->writable && pml4_is_dirty (thread_current ()->pml4, page->va)) {
-		file_write_at (file, kpage, size, start);
-		pml4_set_dirty (thread_current ()->pml4, page->va, false);
+	struct file *file = file_page->file;
+	struct thread *t = thread_current ();
+	if (page->frame == NULL) {
+		hash_delete (&t->spt.spt_hash, &page->h_elem);
+		pml4_clear_page (t->pml4, page->va);
+		return;
 	}
-	free (file);
-	free (file_segment);
+	void *kpage = page->frame->kva;
+	// printf("?????????????????\n");
+	off_t size = file_page->read_bytes;
+	off_t start = file_page->ofs;
+	ASSERT (page != NULL);
+	if (page->writable && pml4_is_dirty (t->pml4, page->va)) {
+		file_write_at (file, kpage, size, start);
+		pml4_set_dirty (t->pml4, page->va, false);
+	}
+
+	pml4_clear_page (t->pml4, page->va);
+	// free (file);
 }
 
 /* Project 3. */
@@ -87,16 +117,15 @@ do_mmap (void *addr, size_t length, int writable,
 
 		file_seek (file_segment->file, offset);
 		aux = (void *)file_segment;
+		if (!vm_alloc_page_with_initializer (VM_FILE, upage,
+						writable, lazy_load_file, aux))
+				return NULL;
 
-		if (length > PGSIZE) {
-			if (!vm_alloc_page_with_initializer (VM_FILE, upage,
-						writable, lazy_load_file, aux))
-				return NULL;
-		}
-		else {
-			if (!vm_alloc_page_with_initializer (VM_FILE | VM_MARKER_1, upage,
-						writable, lazy_load_file, aux))
-				return NULL;
+		struct page *page = spt_find_page (&thread_current()->spt, upage);
+		page->end = false;
+		if(length <= PGSIZE) {
+			page->end = true;
+			break;
 		}
 			
 		length -= page_read_bytes;
@@ -110,39 +139,24 @@ do_mmap (void *addr, size_t length, int writable,
 void
 do_munmap (void *addr) {
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-
+	// printf("munmap?\n");
 	void *upage = pg_round_down (addr);
-    int pg_cnt = 0;
     while (true) {
-        struct page *page = spt_find_page (spt, (uint64_t)upage + pg_cnt * PGSIZE);
-        if (page == NULL) {
+        struct page *page = spt_find_page (spt, upage);
+		if (page == NULL) {
 			exit (-1);
 		}
+		else {
+			if (page->end) {
+				spt_remove_page (spt, page);
+				break;
+			}
+			else {
+				spt_remove_page (spt, page);
+			}
+		}
 
-        struct file_page *file_page = &page->file;
-        if (page->operations->type == VM_ANON) {
-            if (page->uninit.type & VM_MARKER_1) {
-                spt_remove_page (spt, page);
-                break;
-            }
-            spt_remove_page (spt, page);
-        }
-        else if (file_page->type & VM_MARKER_1) {
-			if (page->writable) {
-				file_write_at(file_page->myfile, page->frame->kva, file_page->actual_read_bytes, file_page->ofs);
-				pml4_set_dirty (thread_current ()->pml4, page->va, false);
-			}
-			spt_remove_page (spt, page);
-            break;
-        }
-        else {
-            if (page->writable) {
-				file_write_at (file_page->myfile, page->frame->kva, file_page->actual_read_bytes, file_page->ofs);
-				pml4_set_dirty (thread_current ()->pml4, page->va, false);
-			}
-			spt_remove_page (spt, page);
-        }
-        pg_cnt++;
+        upage += PGSIZE;
     }
 }
 
@@ -163,14 +177,15 @@ lazy_load_file (struct page *page, void *aux) {
 	if (kpage == NULL) {
 		return false;
 	}
+
 	file_seek (file, ofs);
 	size_t read_bytes = file_read (file, kpage, page_read_bytes);
 	memset (kpage + read_bytes, 0, PGSIZE - read_bytes);
 
-	page->file.myfile = file;
-	page->file.actual_read_bytes = read_bytes;
-	page->file.ofs = ofs;
-	page->file.file_segment = aux;
+	// page->file.file = file;
+	// page->file.ofs = ofs;
+	// page->file.read_bytes = read_bytes;
+	// page->file.zero_bytes = PGSIZE - read_bytes;
 
 	return true;
 }

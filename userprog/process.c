@@ -55,6 +55,9 @@ process_create_initd (const char *file_name) {
 	token = strtok_r (file_name, " ", &next_ptr);
 	/* Project 2. */
 
+	/* Project 3. */
+	lock_init (&file_load_lock);
+
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)

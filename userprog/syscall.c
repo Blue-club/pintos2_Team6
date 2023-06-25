@@ -299,7 +299,9 @@ mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 		return NULL;
 	}
 
-	return do_mmap (addr, length, writable, file, offset);
+	/* Project 3: Merge. */
+	void *result = do_mmap (addr, length, writable, file, offset);
+	return result;
 }
 
 void

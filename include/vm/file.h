@@ -9,10 +9,10 @@ enum vm_type;
 struct file_page {
 	/* Project 3. */
 	enum vm_type type;
-	struct file *myfile;
-	size_t actual_read_bytes;
+	struct file *file;
 	off_t ofs;
-	struct file_segment *file_segment;
+	size_t read_bytes;
+	size_t zero_bytes;
 	/* Project 3. */
 };
 

@@ -38,4 +38,7 @@ void process_close_file (int);
 struct thread *get_child_process (pid_t);
 /* Project 2. */
 
+/* Process 3: Merge. */
+struct lock file_load_lock;
+
 #endif /* userprog/process.h */

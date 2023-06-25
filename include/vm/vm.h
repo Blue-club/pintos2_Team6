@@ -62,6 +62,7 @@ struct page {
 	/* Project 3. */
 	struct hash_elem h_elem;
 	bool writable;
+	bool end;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
