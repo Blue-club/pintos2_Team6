@@ -15,6 +15,7 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "devices/input.h"
+#include "lib/stdio.h"
 /* Project 2. */
 
 void syscall_entry (void);
@@ -54,8 +55,9 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f) {
 	int syscall_n = f->R.rax;
-
+	
 	switch (syscall_n) {
+		/* Project 2 */
 		case SYS_HALT:
 			halt ();
 			break;
@@ -98,6 +100,7 @@ syscall_handler (struct intr_frame *f) {
 		case SYS_CLOSE:
 			close (f->R.rdi);
 			break;
+		/* Project 3 */
 		case SYS_MMAP:
 			f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
 			break;
@@ -109,7 +112,7 @@ syscall_handler (struct intr_frame *f) {
 
 void
 check_address(void *addr) {
-	if (!is_user_vaddr (addr) || addr == NULL) {
+	if (is_kernel_vaddr(addr) || addr == NULL) {// || pml4_get_page(thread_current()->pml4, addr) == NULL)
 		exit (-1);
 	}
 }
@@ -122,7 +125,7 @@ halt (void) {
 void
 exit (int status) {
 	struct thread *t = thread_current ();
-	printf ("%s: exit(%d)\n", t->name, status);
+	printf("%s: exit(%d)\n", t->name, status);
 	t->exit_status = status;
 	thread_exit ();
 }
@@ -138,10 +141,11 @@ exec (const char *cmd_line) {
 	char *file_name = (char *)palloc_get_page (PAL_ZERO);
 	if (file_name == NULL)
 		exit (-1);
-	memcpy (file_name, cmd_line, strlen (cmd_line)+1);
-
-	if (process_exec (file_name) == -1) 
+	// memcpy (file_name, cmd_line, strlen (cmd_line)+1);
+	strlcpy (file_name, cmd_line, PGSIZE);
+	if (process_exec (file_name) == -1) {
 		exit (-1);
+	}
 }
 
 int
@@ -208,6 +212,13 @@ read (int fd, void *buffer, unsigned size) {
 			return -1;
 		}
 
+		/* pt-write-code2 없어지는데 lazy-file이 안됨. */
+		struct page *page = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
+		if (page->writable == 0) {
+			lock_release (&filesys_lock);
+			exit(-1);
+		}
+
 		bytes_read = file_read (file, buffer, size);
 		lock_release (&filesys_lock);
 	}
@@ -266,19 +277,26 @@ close (int fd) {
 	process_close_file (fd);
 }
 
-void *
-mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
-	struct file *file = process_get_file(fd);
-
-	if(file == NULL)
+/* Project 3 */
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
+	if (is_kernel_vaddr(addr) || addr == NULL)
 		return NULL;
-	if(fd == 0 || fd == 1)
-		exit(-1);
+	if (is_kernel_vaddr(addr + length) || (addr + length) == NULL)
+		return NULL;
+	if (addr != pg_round_down(addr))
+		return NULL;
+	if (length == 0)
+		return NULL;
+	if (offset % PGSIZE)
+		return NULL;
+
+	struct file *file = process_get_file(fd);
+	if (file == NULL)
+		return NULL;
 
 	return do_mmap(addr, length, writable, file, offset);
 }
 
-void
-munmap (void *addr) {
-
+void munmap (void *addr) {
+	do_munmap(addr);
 }

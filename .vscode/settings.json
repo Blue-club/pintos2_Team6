@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "file.h": "c",
+        "anon.h": "c",
+        "page_cache.h": "c"
+    }
+}

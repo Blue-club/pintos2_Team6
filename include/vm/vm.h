@@ -3,8 +3,10 @@
 #include <stdbool.h>
 #include "threads/palloc.h"
 
+/* Project 3. */
 #include "kernel/hash.h"
 #define VM
+/* Project 3. */
 
 enum vm_type {
 	/* page not initialized */
@@ -22,6 +24,8 @@ enum vm_type {
 	 * markers, until the value is fit in the int. */
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
+	VM_DUMMY = (1 << 5),
+	VM_FILE_END = (1 << 6),
 
 	/* DO NOT EXCEED THIS VALUE. */
 	VM_MARKER_END = (1 << 31),
@@ -36,6 +40,8 @@ enum vm_type {
 
 struct page_operations;
 struct thread;
+/* Project 3 */
+static struct list lru_list;
 
 #define VM_TYPE(type) ((type) & 7)
 
@@ -49,8 +55,13 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
+	/* Project 3. */
 	struct hash_elem h_elem;
 	bool writable;
+	enum vm_type marker;
+	void *kva;
+	struct list_elem s_elem;
+	struct thread *thread;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -91,7 +102,6 @@ struct page_operations {
  * All designs up to you for this. */
 struct supplemental_page_table {
 	struct hash spt_hash;
-	uint64_t *pml4;
 };
 
 #include "threads/thread.h"
@@ -116,6 +126,7 @@ void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 
+/* Project 3. */
 uint64_t hash_func (const struct hash_elem *e, void *aux);
 bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux);
 void action_func(struct hash_elem *e, void *aux);

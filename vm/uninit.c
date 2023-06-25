@@ -11,6 +11,9 @@
 #include "vm/vm.h"
 #include "vm/uninit.h"
 
+/* Project 3 */
+#include "userprog/process.h"
+
 static bool uninit_initialize (struct page *page, void *kva);
 static void uninit_destroy (struct page *page);
 
@@ -23,9 +26,7 @@ static const struct page_operations uninit_ops = {
 };
 
 /* DO NOT MODIFY this function */
-void
-uninit_new (struct page *page, void *va, vm_initializer *init,
-		enum vm_type type, void *aux,
+void uninit_new (struct page *page, void *va, vm_initializer *init, enum vm_type type, void *aux,
 		bool (*initializer)(struct page *, enum vm_type, void *)) {
 	ASSERT (page != NULL);
 
@@ -43,8 +44,7 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
 }
 
 /* Initalize the page on first fault */
-static bool
-uninit_initialize (struct page *page, void *kva) {
+static bool uninit_initialize (struct page *page, void *kva) {
 	struct uninit_page *uninit = &page->uninit;
 
 	/* Fetch first, page_initialize may overwrite the values */
@@ -60,9 +60,10 @@ uninit_initialize (struct page *page, void *kva) {
  * to other page objects, it is possible to have uninit pages when the process
  * exit, which are never referenced during the execution.
  * PAGE will be freed by the caller. */
-static void
-uninit_destroy (struct page *page) {
-	struct uninit_page *uninit UNUSED = &page->uninit;
-	/* TODO: Fill this function.
-	 * TODO: If you don't have anything to do, just return. */
+static void uninit_destroy (struct page *page) {
+	struct uninit_page *uninit = &page->uninit;
+	struct file_segment *file_segment = (struct file_segment *)uninit->aux;
+
+	hash_delete(&thread_current()->spt.spt_hash, &page->h_elem);
+	pml4_clear_page(thread_current()->pml4, page->va);
 }
