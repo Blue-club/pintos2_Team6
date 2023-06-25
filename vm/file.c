@@ -61,12 +61,14 @@ static bool file_backed_swap_out (struct page *page) {
 	}
 
 	pml4_clear_page(thread_current()->pml4, page->va);
+
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void file_backed_destroy (struct page *page) {
 	struct file_page *file_page = &page->file;
-	
+
 	if (pml4_is_dirty(thread_current()->pml4, page->va)) {
 		file_write_at(file_page->file, page->frame->kva, file_page->page_read_bytes, file_page->ofs);
 		pml4_set_dirty(thread_current()->pml4, page->va, 0);
@@ -125,11 +127,11 @@ void do_munmap (void *addr) {
 		struct page *page = spt_find_page(&thread_current()->spt, addr);
 
 		if (page->marker & VM_FILE_END) {
-			destroy(page);
+			vm_dealloc_page(page);
 			break;
 		}
 		else {
-			destroy(page);
+			vm_dealloc_page(page);
 		}
 
 		addr += PGSIZE;

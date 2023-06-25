@@ -176,6 +176,7 @@ static struct frame *vm_evict_frame (void) {
 	struct frame *victim = vm_get_victim ();
 
 	swap_out(victim->page);
+
 	victim->page->frame = NULL;
 	victim->page = NULL;
 
@@ -336,9 +337,7 @@ bool supplemental_page_table_copy (struct supplemental_page_table *dst, struct s
 			}
             case VM_FILE: {
 				struct file_segment *file_segment = malloc(sizeof(struct file_segment));
-				// file_segment->file = malloc(sizeof(struct file));
-				// memcpy(file_segment->file, parent_page->file.file, sizeof(struct file));
-				file_segment->file = parent_page->file.file;
+				file_segment->file = file_reopen(parent_page->file.file);
 				file_segment->page_read_bytes = parent_page->file.page_read_bytes;
 				file_segment->page_zero_bytes = parent_page->file.page_zero_bytes;
 				file_segment->ofs = parent_page->file.page_zero_bytes;
@@ -384,13 +383,6 @@ void action_func(struct hash_elem *e, void *aux) {
 	struct page *page = hash_entry(e, struct page, h_elem);
 
 	if(page) {
-		// if (page->uninit.aux)
-		// 	free(page->uninit.aux);
-		// if (page->frame->kva)
-		// 	palloc_free_page(page->frame->kva);
-		// if (page->frame)
-		// 	free(page->frame);
-
 		vm_dealloc_page(page);
 	}
 }
